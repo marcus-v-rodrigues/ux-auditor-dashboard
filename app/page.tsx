@@ -1,65 +1,116 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import { TelemetryPanel } from '@/components/player/TelemetryPanel';
+import { InsightsPanel } from '@/components/player/InsightsPanel';
+import VideoPlayer from '@/components/player/VideoPlayer';
+import { FileUploader } from '@/components/FileUploader';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, FileJson } from 'lucide-react';
+import { InsightEvent, TelemetryLog } from '@/types/dashboard';
+
+export default function DashboardPage() {
+  const [currentTime, setCurrentTime] = useState(0);
+  const [events, setEvents] = useState<any[]>([]); // Estado dos eventos rrweb
+  const [fileName, setFileName] = useState<string>("");
+
+  // Dados auxiliares (telemetria/insights)
+  const [logs, setLogs] = useState<TelemetryLog[]>([]);
+  const [insights, setInsights] = useState<InsightEvent[]>([]);
+
+  const handleFileLoaded = (uploadedEvents: any[]) => {
+    setEvents(uploadedEvents);
+    setFileName("Sessão Importada");
+    setLogs([]); 
+    setInsights([]); 
+  };
+
+  const resetSession = () => {
+    setEvents([]);
+    setFileName("");
+    setCurrentTime(0);
+  };
+
+  // Filtra overlays ativos
+  const activeOverlays = insights.filter(
+    (i) => Math.abs(i.timestamp - currentTime) < 1000 && i.boundingBox
+  );
+
+  // SE NÃO TIVER ARQUIVO CARREGADO -> MOSTRA UPLOAD
+  if (events.length === 0) {
+    return (
+      <div className="flex flex-col h-screen bg-slate-950 text-slate-100">
+        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-900">
+           <h1 className="font-semibold text-lg text-slate-200">UX Diagnostic Player</h1>
+        </header>
+        <FileUploader onFileLoaded={handleFileLoaded} />
+      </div>
+    );
+  }
+
+  // SE TIVER ARQUIVO -> MOSTRA PLAYER
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+    <div className="flex h-screen w-full bg-slate-950 text-slate-100 overflow-hidden font-sans">
+      
+      {/* Lado Esquerdo */}
+      <aside className="w-[280px] hidden md:block z-20 shadow-xl border-r border-slate-800">
+        <TelemetryPanel logs={logs} currentTime={currentTime} />
+      </aside>
+
+      {/* Centro (Palco) */}
+      <main className="flex-1 flex flex-col relative min-w-0">
+        <header className="h-14 border-b border-slate-800 flex items-center px-4 bg-slate-900 justify-between shrink-0">
+           <div className="flex items-center gap-3">
+             <Button variant="ghost" size="icon" onClick={resetSession} className="text-slate-400 hover:text-white">
+               <ArrowLeft className="h-5 w-5" />
+             </Button>
+             <div>
+               <h1 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                 <FileJson className="h-4 w-4 text-blue-500"/>
+                 {fileName}
+               </h1>
+             </div>
+           </div>
+        </header>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden min-h-0">  
+          {/* Wrapper do Player: Força o player a ficar contido neste espaço */}
+          <div className="flex-1 w-full h-full relative flex items-center justify-center min-h-0">
+              <VideoPlayer 
+                events={events}
+                currentTime={currentTime}
+                overlays={activeOverlays}
+                onTimeUpdate={setCurrentTime}
+              />
+          </div>
+          {/* Timeline Visual (Só aparece se tiver insights gerados) */}
+          {insights.length > 0 && (
+            <div className="w-full max-w-5xl mt-8 px-1">
+               <div className="h-12 w-full bg-slate-900 border border-slate-800 rounded relative overflow-hidden">
+                  <div 
+                    className="absolute top-0 bottom-0 border-r border-blue-500 bg-blue-500/5 transition-all duration-100 ease-linear"
+                    style={{ width: `${(currentTime / (events[events.length-1]?.timestamp - events[0]?.timestamp)) * 100}%` }} 
+                  />
+                  {insights.map(i => (
+                    <div 
+                      key={i.id}
+                      className={`absolute bottom-0 h-2 w-2 rounded-full mb-2 ml-[-4px] ${
+                        i.severity === 'critical' ? 'bg-red-500' : 'bg-yellow-500'
+                      }`}
+                      style={{ left: `${(i.timestamp / 5000) * 100}%` }} // Nota: Cálculo de tempo precisa ser normalizado com o total do vídeo real
+                    />
+                  ))}
+               </div>
+            </div>
+          )}
         </div>
       </main>
+
+      {/* Lado Direito */}
+      <aside className="w-[300px] hidden lg:block z-20 shadow-xl border-l border-slate-800">
+        <InsightsPanel insights={insights} currentTime={currentTime} />
+      </aside>
+
     </div>
   );
 }
