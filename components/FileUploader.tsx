@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 /**
  * Interface de props para o componente FileUploader
  * @property onFileLoaded - Callback executado quando o arquivo é carregado e validado com sucesso.
- *                          Recebe um array de eventos rrweb.
+ * Recebe um array de eventos rrweb.
  */
 interface Props {
   onFileLoaded: (events: any[]) => void;
@@ -94,27 +94,27 @@ export function FileUploader({ onFileLoaded }: Props) {
   };
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-slate-950 p-6">
-      <Card className="w-full max-w-lg border-slate-800 bg-slate-900/50">
-        <CardContent className="pt-6">
+    <div className="flex h-full w-full items-center justify-center bg-background p-6">
+      <Card className="w-full max-w-lg border-border bg-card/50">
+        <CardContent className="">
           <div 
-            className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-700 px-6 py-10 text-center hover:bg-slate-800/50 transition-colors"
+            className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border px-6 py-10 text-center hover:bg-secondary/50 transition-colors"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
           >
-            <div className="mb-4 rounded-full bg-slate-800 p-4">
-              <UploadCloud className="h-8 w-8 text-blue-500" />
+            <div className="mb-4 rounded-full bg-secondary p-4">
+              <UploadCloud className="h-8 w-8 text-primary" />
             </div>
             
-            <h3 className="mb-2 text-lg font-semibold text-slate-100">
-              Upload da Sessão (JSON)
+            <h3 className="mb-2 text-lg font-semibold text-foreground">
+              Session Upload (JSON)
             </h3>
-            <p className="mb-6 text-sm text-slate-400">
-              Arraste seu arquivo <code className="bg-slate-800 px-1 py-0.5 rounded">.json</code> aqui ou clique para selecionar.
+            <p className="mb-6 text-sm text-muted-foreground">
+              Drag your <code className="bg-secondary px-1 py-0.5 rounded">.json</code> file here or click to select.
             </p>
 
-            <label htmlFor="file-upload" className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
-              Selecionar Arquivo
+            <label htmlFor="file-upload" className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-colors">
+              Select File
             </label>
             <input 
               id="file-upload" 

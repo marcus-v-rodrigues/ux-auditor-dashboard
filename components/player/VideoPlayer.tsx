@@ -304,14 +304,14 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-950">
+    <div className="w-full h-full flex flex-col bg-background">
       
       {/*
         ÁREA DE VÍDEO (REPLAY)
         Container responsável pela exibição da sessão gravada.
         Usa refs para controle de escala e posicionamento.
       */}
-      <div className="flex-1 relative overflow-hidden min-h-0 bg-black/50 mx-4 mt-4 border border-slate-800 rounded-t-lg" ref={wrapperRef}>
+      <div className="flex-1 relative overflow-hidden min-h-0 bg-black/50 mx-4 mt-4 border border-border rounded-t-lg" ref={wrapperRef}>
         {/*
           Div escalável que contém o player e os overlays
           Aplica transformações CSS para "fit screen" responsivo
@@ -344,7 +344,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
                     key={insight.id}
                     className={`absolute border-2 ${
                       // Cor baseada na severidade: crítico = vermelho, aviso = amarelo
-                      insight.severity === 'critical' ? 'border-red-500 bg-red-500/20' : 'border-yellow-500 bg-yellow-500/20'
+                      insight.severity === 'critical' ? 'border-destructive bg-destructive/20' : 'border-yellow-500 bg-yellow-500/20'
                     }`}
                     style={{
                       // Posicionamento baseado nas coordenadas da bounding box
@@ -373,23 +373,23 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
         UI customizada para controle de reprodução, substituindo
         a UI nativa do rrweb-player para melhor integração visual.
       */}
-      <div className="h-16 bg-slate-900 border-t border-slate-800 px-6 flex items-center gap-4 shrink-0 z-20 mx-4 rounded-b-lg mb-4 shadow-lg">
+      <div className="h-16 bg-card border-t border-border px-6 flex items-center gap-4 shrink-0 z-20 mx-4 rounded-b-lg mb-4 shadow-lg">
         
         {/* Botão Play/Pause - Controle principal de reprodução */}
         <button
             onClick={togglePlay}
-            className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white transition-colors shadow-lg shrink-0"
+            className="w-10 h-10 rounded-full bg-primary hover:opacity-90 flex items-center justify-center text-primary-foreground transition-colors shadow-lg shrink-0"
         >
             {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}
         </button>
 
         {/* Botão Reiniciar - Volta ao início da sessão */}
-        <button onClick={restart} className="text-slate-400 hover:text-white p-2 transition-colors shrink-0">
+        <button onClick={restart} className="text-muted-foreground hover:text-foreground p-2 transition-colors shrink-0">
             <RotateCcw size={18} />
         </button>
 
         {/* Display de Tempo - Mostra tempo atual e duração total */}
-        <div className="text-xs font-mono text-slate-300 w-28 text-center bg-slate-800 py-1 rounded border border-slate-700 shrink-0">
+        <div className="text-xs font-mono text-muted-foreground w-28 text-center bg-secondary py-1 rounded border border-border shrink-0">
             {formatTime(currentTime)} / {formatTime(duration)}
         </div>
 
@@ -401,14 +401,14 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
                 max={duration || 100} 
                 value={currentTime ?? 0} // Fix para erro de controlled/uncontrolled
                 onChange={handleSeek}
-                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:h-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary hover:h-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
         </div>
 
         {/* Botão de Velocidade - Cicla entre velocidades de reprodução */}
         <button
             onClick={cycleSpeed}
-            className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-white bg-slate-800 px-3 py-1.5 rounded border border-slate-700 w-16 justify-center transition-colors shrink-0"
+            className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-border bg-secondary px-3 py-1.5 rounded border border-border w-16 justify-center transition-colors shrink-0"
         >
             <FastForward size={14} />
             {speed}x

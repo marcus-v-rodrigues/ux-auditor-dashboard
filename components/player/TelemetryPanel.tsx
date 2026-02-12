@@ -34,12 +34,12 @@ export function TelemetryPanel({ logs, currentTime }: Props) {
   const pastLogs = logs.filter(l => l.timestamp <= currentTime);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border-r border-slate-800">
+    <div className="flex flex-col h-full bg-card border-r border-border">
       {/* Cabeçalho do painel de telemetria */}
-      <div className="p-4 border-b border-slate-800 bg-slate-900/50">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-          <Activity className="w-4 h-4 text-blue-500" />
-          Telemetria (HID)
+      <div className="p-4 border-b border-border bg-card/50">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+          <Activity className="w-4 h-4 text-primary" />
+          Telemetry (HID)
         </h2>
       </div>
       
@@ -50,18 +50,18 @@ export function TelemetryPanel({ logs, currentTime }: Props) {
           {pastLogs.slice().reverse().map((log) => (
             <div
               key={log.id}
-              className="text-[10px] md:text-xs font-mono p-2 rounded bg-slate-800/40 border-l-2 border-blue-500/50 animate-in fade-in slide-in-from-left-1"
+              className="text-[10px] md:text-xs font-mono p-2 rounded bg-secondary border-l-2 border-primary/50 animate-in fade-in slide-in-from-left-1"
             >
               {/* Timestamp formatado com padding para alinhamento */}
-              <span className="text-slate-500 mr-2">
+              <span className="text-muted-foreground mr-2">
                 [{String(log.timestamp).padStart(4, '0')}ms]
               </span>
               
               {/* Tipo do evento (click, input, scroll, etc.) */}
-              <span className="text-slate-200 font-semibold">{log.eventType}</span>
+              <span className="text-foreground font-semibold">{log.eventType}</span>
               
               {/* Detalhes adicionais do evento */}
-              <div className="text-slate-400 truncate mt-0.5">
+              <div className="text-muted-foreground truncate mt-0.5">
                 {log.details}
               </div>
             </div>
