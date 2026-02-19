@@ -16,8 +16,8 @@ function JanusProvider(options: any): OAuthConfig<any> {
         response_type: "code",
       },
     },
-    token: `${process.env.JANUS_IDP_ISSUER}/oauth2/token`,
-    userinfo: `${process.env.JANUS_IDP_ISSUER}/oauth2/userinfo`,
+    token: `${process.env.AUTH_ISSUER_URL}/oauth2/token`,
+    userinfo: `${process.env.AUTH_ISSUER_URL}/oauth2/userinfo`,
     profile(profile: any) {
       return {
         id: profile.sub || profile.id,
@@ -43,12 +43,12 @@ function JanusProvider(options: any): OAuthConfig<any> {
 const authOptions: NextAuthConfig = {
   providers: [
     JanusProvider({
-      clientId: process.env.JANUS_IDP_CLIENT_ID!,
-      clientSecret: process.env.JANUS_IDP_CLIENT_SECRET!,
+      clientId: process.env.AUTH_CLIENT_ID!,
+      clientSecret: process.env.AUTH_CLIENT_SECRET!,
       authorization: {
-        url: `${process.env.JANUS_IDP_ISSUER}/oauth2/authorize`,
+        url: `${process.env.AUTH_ISSUER_URL}/oauth2/authorize`,
         params: {
-          scope: process.env.JANUS_IDP_SCOPE || "openid email profile",
+          scope: process.env.AUTH_SCOPE || "openid email profile",
         },
       },
     }),

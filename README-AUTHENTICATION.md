@@ -78,10 +78,10 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=seu-secret-key-aqui
 
 # Configuração OAuth2 do Janus IDP
-JANUS_IDP_ISSUER=https://seu-dominio-vps.com
-JANUS_IDP_CLIENT_ID=seu-janus-client-id
-JANUS_IDP_CLIENT_SECRET=seu-janus-client-secret
-JANUS_IDP_SCOPE=openid email profile
+AUTH_ISSUER_URL=https://seu-dominio-vps.com
+AUTH_CLIENT_ID=seu-janus-client-id
+AUTH_CLIENT_SECRET=seu-janus-client-secret
+AUTH_SCOPE=openid email profile
 
 # Configuração da API
 UX_AUDITOR_API_URL=http://localhost:8000

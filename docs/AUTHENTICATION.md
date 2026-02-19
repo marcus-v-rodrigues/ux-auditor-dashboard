@@ -60,10 +60,10 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=seu-secret-key-aqui-gerado-com-openssl-rand-base64-32
 
 # Configuração OAuth2 do Janus IDP
-JANUS_IDP_ISSUER=https://seu-dominio-vps.com
-JANUS_IDP_CLIENT_ID=seu-janus-client-id
-JANUS_IDP_CLIENT_SECRET=seu-janus-client-secret
-JANUS_IDP_SCOPE=openid email profile
+AUTH_ISSUER_URL=https://seu-dominio-vps.com
+AUTH_CLIENT_ID=seu-janus-client-id
+AUTH_CLIENT_SECRET=seu-janus-client-secret
+AUTH_SCOPE=openid email profile
 
 # Configuração da API
 UX_AUDITOR_API_URL=http://localhost:8000
@@ -243,14 +243,14 @@ async jwt({ token, account, user }) {
   if (Date.now() >= Number(token.expiresAt || 0)) {
     // Implemente lógica de refresh aqui
     // Exemplo:
-    // const response = await fetch(`${process.env.JANUS_IDP_ISSUER}/oauth2/token`, {
+    // const response = await fetch(`${process.env.AUTH_ISSUER_URL}/oauth2/token`, {
     //   method: 'POST',
     //   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     //   body: new URLSearchParams({
     //     grant_type: 'refresh_token',
     //     refresh_token: token.refreshToken,
-    //     client_id: process.env.JANUS_IDP_CLIENT_ID!,
-    //     client_secret: process.env.JANUS_IDP_CLIENT_SECRET!,
+    //     client_id: process.env.AUTH_CLIENT_ID!,
+    //     client_secret: process.env.AUTH_CLIENT_SECRET!,
     //   }),
     // });
     // const tokens = await response.json();
@@ -305,7 +305,7 @@ Verifique:
 ### "Credenciais de cliente inválidas"
 
 Verifique:
-1. `JANUS_IDP_CLIENT_ID` e `JANUS_IDP_CLIENT_SECRET` estão corretos
+1. `AUTH_CLIENT_ID` e `AUTH_CLIENT_SECRET` estão corretos
 2. Cliente está registrado no Janus IDP
 3. URI de redirecionamento corresponde (ex: `http://localhost:3000/api/auth/callback/janus`)
 

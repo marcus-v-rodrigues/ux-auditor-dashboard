@@ -1,0 +1,64 @@
+# =============================================================================
+# Docker Compose - UX Auditor Dashboard
+# =============================================================================
+# Este arquivo define a configuração do container Docker para o frontend
+# do ecossistema UX Auditor. Faz parte de uma arquitetura de microsserviços
+# que se conecta a outros serviços através de uma rede Docker externa.
+# =============================================================================
+
+
+# =============================================================================
+# SERVIÇOS
+# =============================================================================
+services:
+  # ---------------------------------------------------------------------------
+  # UX Auditor Dashboard - Frontend Next.js
+  # ---------------------------------------------------------------------------
+  # Serviço principal que executa a aplicação Next.js com NextAuth para
+  # autenticação. O extra_hosts é obrigatório para que o NextAuth consiga
+  # resolver o localhost da máquina host ao se comunicar com o Provedor
+  # de Identidade externo (ex: Keycloak, Auth0, etc).
+  # ---------------------------------------------------------------------------
+  ux-auditor-dashboard:
+    # Nome do container (obrigatoriamente com underline)
+    container_name: ux_auditor_dashboard
+    
+    # Build do diretório atual
+    build: .
+    
+    # Mapeamento de portas (host:container)
+    ports:
+      - "3001:3001"
+    
+    # Arquivo de variáveis de ambiente
+    # NENHUMA variável deve ser declarada diretamente no compose
+    env_file:
+      - .env.local
+    
+    # CRÍTICO: Permite que o NextAuth resolva o localhost da máquina host
+    # Isso é necessário para comunicação com o Provedor de Identidade externo
+    # que pode estar rodando localmente na máquina host
+    extra_hosts:
+      - "localhost:host-gateway"
+    
+    # Conexão com a rede externa do ecossistema
+    networks:
+      - ux_auditor_network
+    
+    # Política de reinício
+    restart: unless-stopped
+
+# =============================================================================
+# REDES
+# =============================================================================
+networks:
+  # ---------------------------------------------------------------------------
+  # Rede Externa do Ecossistema UX Auditor
+  # ---------------------------------------------------------------------------
+  # Esta rede DEVE ser criada previamente antes de executar o docker-compose.
+  # Comando para criar: docker network create ux_auditor_network
+  # A rede é compartilhada entre todos os microsserviços do ecossistema,
+  # permitindo a comunicação entre os containers.
+  # ---------------------------------------------------------------------------
+  ux_auditor_network:
+    external: true
