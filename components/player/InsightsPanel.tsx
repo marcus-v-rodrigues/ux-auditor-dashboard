@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InsightEvent, PsychometricData, IntentAnalysis } from "@/types/dashboard";
 import { Eye, AlertTriangle, CheckCircle2, Brain, Target, BarChart3 } from "lucide-react";
+import { SemanticSummary } from "./SemanticSummary";
 
 /**
  * Interface de props para o componente InsightsPanel
@@ -10,12 +11,14 @@ import { Eye, AlertTriangle, CheckCircle2, Brain, Target, BarChart3 } from "luci
  * @property currentTime - Tempo atual da reprodução em milissegundos
  * @property psychometrics - Dados psicométricos extraídos durante a análise (opcional)
  * @property intentAnalysis - Análise de intenção do usuário (opcional)
+ * @property narrative - Texto narrativo gerado pela IA sobre a sessão (opcional)
  */
 interface Props {
   insights: InsightEvent[];
   currentTime: number;
   psychometrics?: PsychometricData | null;
   intentAnalysis?: IntentAnalysis | null;
+  narrative?: string | null;
 }
 
 /**
@@ -28,13 +31,15 @@ interface Props {
  * - Visualização de bounding boxes no player quando aplicável
  * - Feedback visual de estado (vazio ou com anomalias)
  * - Exibição de dados psicométricos e análise de intenção
+ * - Resumo semântico executivo com narrativa da sessão
  *
  * @param insights - Lista de todos os insights detectados
  * @param currentTime - Tempo atual em milissegundos
  * @param psychometrics - Dados psicométricos extraídos (opcional)
  * @param intentAnalysis - Análise de intenção do usuário (opcional)
+ * @param narrative - Texto narrativo gerado pela IA sobre a sessão (opcional)
  */
-export function InsightsPanel({ insights, currentTime, psychometrics, intentAnalysis }: Props) {
+export function InsightsPanel({ insights, currentTime, psychometrics, intentAnalysis, narrative }: Props) {
   /**
    * Filtra insights ativos baseando-se no tempo atual de reprodução.
    * Considera um insight como "ativo" se estiver dentro de uma janela
@@ -223,6 +228,19 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Seção de Resumo Semântico - Exibida na parte inferior quando narrativa está disponível */}
+        {narrative && psychometrics && (
+          <div className="mt-6 pt-4 border-t border-border">
+            <SemanticSummary
+              narrative={narrative}
+              psychometrics={{
+                frustration_score: psychometrics.frustration_score / 10, // Converte de 0-100 para 0-10
+                cognitive_load_score: psychometrics.confusion_score / 10, // Usa confusion como proxy para carga cognitiva
+              }}
+            />
           </div>
         )}
       </ScrollArea>
