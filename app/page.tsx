@@ -13,21 +13,24 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [events, setEvents] = useState<any[]>([]); // Estado dos eventos rrweb
   const [fileName, setFileName] = useState<string>("");
+  const [sessionUuid, setSessionUuid] = useState<string>("");
 
   // Dados auxiliares (telemetria/insights)
   const [logs, setLogs] = useState<TelemetryLog[]>([]);
   const [insights, setInsights] = useState<InsightEvent[]>([]);
 
-  const handleFileLoaded = (uploadedEvents: any[]) => {
+  const handleFileLoaded = (uploadedEvents: any[], uuid: string) => {
     setEvents(uploadedEvents);
-    setFileName("Imported Session");
-    setLogs([]); 
-    setInsights([]); 
+    setSessionUuid(uuid);
+    setFileName(`Session: ${uuid.slice(0, 8)}...`);
+    setLogs([]);
+    setInsights([]);
   };
 
   const resetSession = () => {
     setEvents([]);
     setFileName("");
+    setSessionUuid("");
     setCurrentTime(0);
   };
 
