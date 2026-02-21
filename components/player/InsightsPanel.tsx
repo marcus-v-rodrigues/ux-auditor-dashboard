@@ -1,17 +1,21 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { InsightEvent } from "@/types/dashboard";
-import { Eye, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { InsightEvent, PsychometricData, IntentAnalysis } from "@/types/dashboard";
+import { Eye, AlertTriangle, CheckCircle2, Brain, Target, BarChart3 } from "lucide-react";
 
 /**
  * Interface de props para o componente InsightsPanel
  * @property insights - Array completo de insights/anomalias detectadas pela IA
  * @property currentTime - Tempo atual da reprodução em milissegundos
+ * @property psychometrics - Dados psicométricos extraídos durante a análise (opcional)
+ * @property intentAnalysis - Análise de intenção do usuário (opcional)
  */
 interface Props {
   insights: InsightEvent[];
   currentTime: number;
+  psychometrics?: PsychometricData | null;
+  intentAnalysis?: IntentAnalysis | null;
 }
 
 /**
@@ -23,11 +27,14 @@ interface Props {
  * - Classificação por severidade (crítico/aviso)
  * - Visualização de bounding boxes no player quando aplicável
  * - Feedback visual de estado (vazio ou com anomalias)
+ * - Exibição de dados psicométricos e análise de intenção
  *
  * @param insights - Lista de todos os insights detectados
  * @param currentTime - Tempo atual em milissegundos
+ * @param psychometrics - Dados psicométricos extraídos (opcional)
+ * @param intentAnalysis - Análise de intenção do usuário (opcional)
  */
-export function InsightsPanel({ insights, currentTime }: Props) {
+export function InsightsPanel({ insights, currentTime, psychometrics, intentAnalysis }: Props) {
   /**
    * Filtra insights ativos baseando-se no tempo atual de reprodução.
    * Considera um insight como "ativo" se estiver dentro de uma janela
@@ -48,8 +55,135 @@ export function InsightsPanel({ insights, currentTime }: Props) {
         </h2>
       </div>
       
-      {/* Área de scroll com lista de insights */}
+      {/* Área de scroll com lista de insights e dados processados */}
       <ScrollArea className="flex-1 p-4">
+        {/* Seção de Dados Psicométricos - Exibida quando disponível */}
+        {psychometrics && (
+          <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2 mb-3">
+              <Brain className="w-4 h-4" />
+              Psicometria
+            </h3>
+            <div className="space-y-2">
+              {/* Barra de engajamento */}
+              <div>
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-muted-foreground">Engajamento</span>
+                  <span className="text-green-400">{psychometrics.engagement_score}%</span>
+                </div>
+                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-green-500 rounded-full transition-all"
+                    style={{ width: `${psychometrics.engagement_score}%` }}
+                  />
+                </div>
+              </div>
+              {/* Barra de frustração */}
+              <div>
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-muted-foreground">Frustração</span>
+                  <span className="text-red-400">{psychometrics.frustration_score}%</span>
+                </div>
+                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-red-500 rounded-full transition-all"
+                    style={{ width: `${psychometrics.frustration_score}%` }}
+                  />
+                </div>
+              </div>
+              {/* Barra de confusão */}
+              <div>
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-muted-foreground">Confusão</span>
+                  <span className="text-yellow-400">{psychometrics.confusion_score}%</span>
+                </div>
+                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-yellow-500 rounded-full transition-all"
+                    style={{ width: `${psychometrics.confusion_score}%` }}
+                  />
+                </div>
+              </div>
+              {/* Padrões de comportamento */}
+              {psychometrics.behavior_patterns.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-blue-500/20">
+                  <p className="text-[10px] text-muted-foreground mb-1">Padrões:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {psychometrics.behavior_patterns.map((pattern, idx) => (
+                      <Badge key={idx} variant="outline" className="text-[9px] h-4 bg-blue-500/10 border-blue-500/30 text-blue-300">
+                        {pattern}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Seção de Análise de Intenção - Exibida quando disponível */}
+        {intentAnalysis && (
+          <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2 mb-3">
+              <Target className="w-4 h-4" />
+              Intenção do Usuário
+            </h3>
+            {/* Intenção principal */}
+            <div className="mb-2">
+              <p className="text-[10px] text-muted-foreground mb-1">Intenção Principal:</p>
+              <p className="text-xs text-foreground font-medium">{intentAnalysis.primary_intent}</p>
+            </div>
+            {/* Intenções secundárias */}
+            {intentAnalysis.secondary_intents.length > 0 && (
+              <div className="mb-2">
+                <p className="text-[10px] text-muted-foreground mb-1">Intenções Secundárias:</p>
+                <div className="flex flex-wrap gap-1">
+                  {intentAnalysis.secondary_intents.map((intent, idx) => (
+                    <Badge key={idx} variant="outline" className="text-[9px] h-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+                      {intent}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Probabilidade de sucesso */}
+            <div className="mb-2">
+              <div className="flex justify-between text-[10px] mb-1">
+                <span className="text-muted-foreground">Prob. de Sucesso</span>
+                <span className="text-emerald-400">{intentAnalysis.success_probability}%</span>
+              </div>
+              <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-emerald-500 rounded-full transition-all"
+                  style={{ width: `${intentAnalysis.success_probability}%` }}
+                />
+              </div>
+            </div>
+            {/* Barreiras identificadas */}
+            {intentAnalysis.barriers.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-emerald-500/20">
+                <p className="text-[10px] text-muted-foreground mb-1">Barreiras:</p>
+                <ul className="text-[10px] text-red-300 space-y-1">
+                  {intentAnalysis.barriers.map((barrier, idx) => (
+                    <li key={idx} className="flex items-start gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                      {barrier}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Seção de Insights/Anomalias */}
+        <div className="mb-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
+            <BarChart3 className="w-4 h-4 text-orange-500" />
+            Anomalias Detectadas
+          </h3>
+        </div>
+        
         {/* Estado vazio: nenhum insight ativo no momento */}
         {activeInsights.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground space-y-2">

@@ -6,40 +6,186 @@ import { InsightsPanel } from '@/components/player/InsightsPanel';
 import VideoPlayer from '@/components/player/VideoPlayer';
 import { FileUploader } from '@/components/FileUploader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, FileJson } from 'lucide-react';
-import { InsightEvent, TelemetryLog } from '@/types/dashboard';
+import { ArrowLeft, FileJson, Sparkles, AlertCircle } from 'lucide-react';
+import { InsightEvent, TelemetryLog, SessionProcessResponse, PsychometricData, IntentAnalysis } from '@/types/dashboard';
 
+/**
+ * Página principal do Dashboard UX Auditor
+ * 
+ * Gerencia o fluxo completo de análise de sessões:
+ * 1. Upload de arquivo de sessão rrweb
+ * 2. Reprodução da gravação
+ * 3. Disparo de análise de IA
+ * 4. Exibição de insights e diagnósticos
+ */
 export default function DashboardPage() {
+  // Estado do tempo atual de reprodução em milissegundos
   const [currentTime, setCurrentTime] = useState(0);
-  const [events, setEvents] = useState<any[]>([]); // Estado dos eventos rrweb
+  // Estado dos eventos rrweb carregados do arquivo
+  const [events, setEvents] = useState<any[]>([]);
+  // Nome do arquivo/sessão exibido no header
   const [fileName, setFileName] = useState<string>("");
+  // UUID da sessão retornado após upload bem-sucedido
   const [sessionUuid, setSessionUuid] = useState<string>("");
 
   // Dados auxiliares (telemetria/insights)
   const [logs, setLogs] = useState<TelemetryLog[]>([]);
   const [insights, setInsights] = useState<InsightEvent[]>([]);
+  
+  // Estados para dados processados pela IA
+  // Narrativa gerada pela IA sobre a sessão
+  const [narrative, setNarrative] = useState<string>("");
+  // Dados psicométricos extraídos durante a análise
+  const [psychometrics, setPsychometrics] = useState<PsychometricData | null>(null);
+  // Análise de intenção do usuário
+  const [intentAnalysis, setIntentAnalysis] = useState<IntentAnalysis | null>(null);
 
+  // Estados de controle da análise de IA
+  // Indica se o pipeline de análise está em execução
+  const [isProcessing, setIsProcessing] = useState(false);
+  // Mensagem de erro caso a análise falhe
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  /**
+   * Callback executado quando o arquivo é carregado com sucesso
+   * Inicializa todos os estados necessários para a sessão
+   * 
+   * @param uploadedEvents - Array de eventos rrweb do arquivo
+   * @param uuid - Identificador único da sessão retornado pelo backend
+   */
   const handleFileLoaded = (uploadedEvents: any[], uuid: string) => {
     setEvents(uploadedEvents);
     setSessionUuid(uuid);
     setFileName(`Session: ${uuid.slice(0, 8)}...`);
+    // Limpa estados de sessões anteriores
     setLogs([]);
     setInsights([]);
+    setNarrative("");
+    setPsychometrics(null);
+    setIntentAnalysis(null);
+    setErrorMessage("");
   };
 
+  /**
+   * Reseta completamente a sessão atual
+   * Limpa todos os estados e volta para a tela de upload
+   */
   const resetSession = () => {
     setEvents([]);
     setFileName("");
     setSessionUuid("");
     setCurrentTime(0);
+    setInsights([]);
+    setLogs([]);
+    setNarrative("");
+    setPsychometrics(null);
+    setIntentAnalysis(null);
+    setErrorMessage("");
+    setIsProcessing(false);
   };
 
-  // Filtra overlays ativos
+  /**
+   * Dispara o pipeline de análise de IA no backend
+   * 
+   * Fluxo do pipeline no backend:
+   * 1. Preprocessor - Pré-processa os eventos rrweb
+   * 2. Isolation Forest - Detecta anomalias estatísticas
+   * 3. Heurísticas - Aplica regras de UX pré-definidas
+   * 4. LLM - Gera insights narrativos com IA
+   * 
+   * @throws Error se a sessão não estiver disponível ou a API falhar
+   */
+  const triggerAnalysis = async () => {
+    // Verifica se existe uma sessão válida antes de prosseguir
+    if (!sessionUuid) {
+      setErrorMessage("Nenhuma sessão ativa para analisar. Faça o upload de um arquivo primeiro.");
+      return;
+    }
+
+    // Limpa erros anteriores e inicia o estado de processamento
+    setErrorMessage("");
+    setIsProcessing(true);
+
+    try {
+      // Obtém a URL base da API das variáveis de ambiente
+      const baseUrl = process.env.NEXT_PUBLIC_UX_AUDITOR_API_URL || "http://localhost:8000";
+      
+      // Monta a URL do endpoint de processamento
+      const endpoint = `/sessions/${sessionUuid}/process`;
+      const url = `${baseUrl}${endpoint}`;
+
+      // Faz a requisição POST para disparar o pipeline de análise
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Verifica se a resposta foi bem-sucedida
+      if (!response.ok) {
+        // Tenta extrair a mensagem de erro do corpo da resposta
+        let errorMsg = `Erro HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorData.error || errorMsg;
+        } catch {
+          // Se não conseguir parsear o JSON, usa a mensagem padrão
+        }
+        throw new Error(errorMsg);
+      }
+
+      // Parseia a resposta JSON
+      const data: SessionProcessResponse = await response.json();
+
+      // Mapeia a resposta para os estados reativos da aplicação
+      // Isso garante que os painéis laterais reflitam os dados processados
+      
+      // Atualiza os insights detectados pelo pipeline
+      if (data.insights && Array.isArray(data.insights)) {
+        setInsights(data.insights);
+      }
+
+      // Atualiza a narrativa gerada pela IA
+      if (data.narrative) {
+        setNarrative(data.narrative);
+      }
+
+      // Atualiza os dados psicométricos extraídos
+      if (data.psychometrics) {
+        setPsychometrics(data.psychometrics);
+      }
+
+      // Atualiza a análise de intenção do usuário
+      if (data.intent_analysis) {
+        setIntentAnalysis(data.intent_analysis);
+      }
+
+    } catch (error) {
+      // Tratamento de erros robusto
+      console.error("Erro durante a análise de IA:", error);
+      
+      // Define a mensagem de erro apropriada para exibição na UI
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else if (typeof error === 'string') {
+        setErrorMessage(error);
+      } else {
+        setErrorMessage("Ocorreu um erro inesperado durante a análise. Por favor, tente novamente.");
+      }
+    } finally {
+      // Garante que o estado de processamento seja finalizado
+      setIsProcessing(false);
+    }
+  };
+
+  // Filtra overlays ativos baseados no tempo atual de reprodução
+  // Considera um overlay como ativo se estiver dentro de uma janela de 1 segundo
   const activeOverlays = insights.filter(
     (i) => Math.abs(i.timestamp - currentTime) < 1000 && i.boundingBox
   );
 
-  // SE NÃO TIVER ARQUIVO CARREGADO -> MOSTRA UPLOAD
+  // SE NÃO TIVER ARQUIVO CARREGADO -> MOSTRA TELA DE UPLOAD
   if (events.length === 0) {
     return (
       <div className="flex flex-col h-screen bg-background text-foreground">
@@ -51,19 +197,20 @@ export default function DashboardPage() {
     );
   }
 
-  // SE TIVER ARQUIVO -> MOSTRA PLAYER
+  // SE TIVER ARQUIVO -> MOSTRA PLAYER COM PAINÉIS
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans">
       
-      {/* Lado Esquerdo */}
+      {/* Lado Esquerdo - Painel de Telemetria */}
       <aside className="w-[280px] hidden md:block z-20 shadow-xl border-r border-border">
         <TelemetryPanel logs={logs} currentTime={currentTime} />
       </aside>
 
-      {/* Centro (Palco) */}
+      {/* Centro (Palco Principal) */}
       <main className="flex-1 flex flex-col relative min-w-0">
         <header className="h-14 border-b border-border flex items-center px-4 bg-card justify-between shrink-0">
            <div className="flex items-center gap-3">
+             {/* Botão de voltar para a tela de upload */}
              <Button variant="ghost" size="icon" onClick={resetSession} className="text-muted-foreground hover:text-foreground">
                <ArrowLeft className="h-5 w-5" />
              </Button>
@@ -74,7 +221,45 @@ export default function DashboardPage() {
                </h1>
              </div>
            </div>
+           
+           {/* Botão de Iniciar Auditoria de IA - Renderizado condicionalmente */}
+           {sessionUuid && (
+             <Button
+               onClick={triggerAnalysis}
+               disabled={isProcessing}
+               className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+             >
+               {isProcessing ? (
+                 <>
+                   {/* Ícone de carregamento animado durante o processamento */}
+                   <Sparkles className="h-4 w-4 animate-spin" />
+                   Processando com IA...
+                 </>
+               ) : (
+                 <>
+                   <Sparkles className="h-4 w-4" />
+                   Iniciar Auditoria de IA
+                 </>
+               )}
+             </Button>
+           )}
         </header>
+
+        {/* Exibição de erro caso a análise falhe */}
+        {errorMessage && (
+          <div className="mx-4 mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-center gap-2 text-destructive text-sm">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {/* Indicador de narrativa gerada pela IA */}
+        {narrative && !isProcessing && (
+          <div className="mx-4 mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-md">
+            <p className="text-xs text-purple-300 font-medium mb-1">Análise da IA:</p>
+            <p className="text-sm text-foreground">{narrative}</p>
+          </div>
+        )}
 
         <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden min-h-0">  
           {/* Wrapper do Player: Força o player a ficar contido neste espaço */}
@@ -90,10 +275,12 @@ export default function DashboardPage() {
           {insights.length > 0 && (
             <div className="w-full max-w-5xl mt-8 px-1">
                <div className="h-12 w-full bg-card border border-border rounded relative overflow-hidden">
+                  {/* Barra de progresso da reprodução */}
                   <div 
                     className="absolute top-0 bottom-0 border-r border-primary bg-primary/5 transition-all duration-100 ease-linear"
                     style={{ width: `${(currentTime / (events[events.length-1]?.timestamp - events[0]?.timestamp)) * 100}%` }} 
                   />
+                  {/* Marcadores de insights na timeline */}
                   {insights.map(i => (
                     <div 
                       key={i.id}
@@ -109,9 +296,14 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* Lado Direito */}
+      {/* Lado Direito - Painel de Insights */}
       <aside className="w-[300px] hidden lg:block z-20 shadow-xl border-l border-border">
-        <InsightsPanel insights={insights} currentTime={currentTime} />
+        <InsightsPanel 
+          insights={insights} 
+          currentTime={currentTime}
+          psychometrics={psychometrics}
+          intentAnalysis={intentAnalysis}
+        />
       </aside>
 
     </div>
