@@ -42,7 +42,6 @@ docker-compose.yml
 
 # Arquivos de documentação
 README.md
-README-AUTHENTICATION.md
 docs/
 
 # Arquivos de teste

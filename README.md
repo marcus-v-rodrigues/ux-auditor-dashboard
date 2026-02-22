@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UX Auditor Dashboard
 
-## Getting Started
+Dashboard para análise de experiência do usuário (UX) com autenticação OAuth2 usando NextAuth.js e Janus IDP.
 
-First, run the development server:
+## Características
+
+- **Autenticação OAuth2 com PKCE**: Fluxo seguro de autenticação usando Proof Key for Code Exchange
+- **Renovação Automática de Tokens**: Refresh automático usando refresh_token
+- **Proteção de Rotas**: Middleware para proteger todas as rotas do dashboard
+- **Fetch Autenticado**: Helper para chamadas de API do lado do servidor com injeção automática de token
+- **Tipagem TypeScript**: Suporte completo TypeScript para todas as operações
+
+## Documentação
+
+Para informações detalhadas sobre autenticação, consulte:
+
+- [Documentação de Autenticação](docs/AUTHENTICATION.md) - Guia completo de autenticação OAuth2 com PKCE
+- [Fluxo de Dados](docs/DATA-FLOW.md) - Documentação do fluxo de dados da aplicação
+
+## Configuração
+
+### 1. Instalar Dependências
+
+```bash
+npm install
+```
+
+### 2. Configurar Variáveis de Ambiente
+
+Copie o arquivo de exemplo e configure seus valores:
+
+```bash
+cp .env.local.example .env.local
+```
+
+Edite `.env.local` com suas configurações:
+
+```bash
+# Configuração do NextAuth
+AUTH_URL=http://localhost:3001
+AUTH_SECRET=seu-secret-key-aqui
+
+# Configuração OAuth2 do Janus IDP
+AUTH_ISSUER_URL=http://localhost:3000/oidc
+AUTH_CLIENT_ID=ux-auditor
+AUTH_CLIENT_SECRET=janus_dashboard_secret
+AUTH_SCOPE=openid profile email offline_access
+
+# Configuração da API
+UX_AUDITOR_API_URL=http://localhost:8000
+```
+
+Gere o `AUTH_SECRET`:
+
+```bash
+openssl rand -base64 32
+```
+
+### 3. Iniciar o Servidor de Desenvolvimento
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra [http://localhost:3001](http://localhost:3001) no seu navegador.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Estrutura do Projeto
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+ux-auditor-dashboard/
+├── app/                    # Aplicação Next.js
+│   ├── api/               # Rotas de API
+│   │   └── auth/          # Rotas de autenticação NextAuth
+│   ├── auth/              # Páginas de autenticação
+│   └── page.tsx           # Página principal
+├── components/            # Componentes React
+│   ├── auth/              # Componentes de autenticação
+│   ├── player/            # Componentes do player de vídeo
+│   └── ui/                # Componentes UI (shadcn/ui)
+├── lib/                   # Bibliotecas utilitárias
+│   └── authenticated-fetch.ts  # Helper de fetch autenticado
+├── types/                 # Definições TypeScript
+├── docs/                  # Documentação
+├── middleware.ts          # Middleware de proteção de rotas
+└── .env.local.example     # Template de variáveis de ambiente
+```
 
-## Learn More
+## Tecnologias
 
-To learn more about Next.js, take a look at the following resources:
+- **Next.js 15** - Framework React
+- **NextAuth.js v5** - Autenticação OAuth2
+- **TypeScript** - Tipagem estática
+- **shadcn/ui** - Componentes UI
+- **Tailwind CSS** - Estilização
+- **Janus IDP** - Provedor de identidade OIDC
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Desenvolvimento
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Executar em Modo de Desenvolvimento
 
-## Deploy on Vercel
+```bash
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Build para Produção
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+npm start
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
+## Recursos de Segurança
+
+✅ **PKCE (Proof Key for Code Exchange)** - Previne interceptação de código de autorização  
+✅ **Parâmetro State** - Proteção contra CSRF  
+✅ **Gerenciamento de Tokens** - Tratamento de access_token e refresh_token  
+✅ **Renovação Automática de Tokens** - Refresh automático usando refresh_token  
+✅ **Proteção de Rotas** - Autenticação baseada em middleware  
+✅ **Cookies de Sessão Criptografados** - Assinados com `AUTH_SECRET`
+
+## Licença
+
+Este projeto é parte do trabalho de mestrado e está sob licença acadêmica.
+
