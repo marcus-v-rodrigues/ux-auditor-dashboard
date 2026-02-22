@@ -12,6 +12,7 @@ import crypto from "crypto";
  * - client_secret: janus_dashboard_secret (ou UX_CLIENT_SECRET do .env)
  * - redirect_uri: http://localhost:3001/api/auth/callback/janus
  * - scopes: openid profile email offline_access
+ * - checks: pkce, state (exigido pelo Janus IDP)
  *
  * Fluxo PKCE:
  * 1. Gerar code_verifier (random string 43-128 chars)
@@ -21,16 +22,20 @@ import crypto from "crypto";
  * 5. Receber access_token e refresh_token
  *
  * NOTA IMPORTANTE sobre comunicação Docker:
- * O container do dashboard precisa se comunicar com o Janus IDP para descoberta OIDC
- * e troca de tokens. No ambiente Docker, usamos o nome do serviço (janus-service)
- * para comunicação interna, mas o issuer permanece como localhost para que o
- * navegador do usuário possa acessar os endpoints de autorização.
+ * Devido ao conflito de DNS entre containers Docker e o navegador do usuário,
+ * os endpoints são separados em duas categorias:
  *
- * O Janus IDP expõe os seguintes endpoints:
- * - authorization_endpoint: /oidc/auth (acessado pelo navegador do usuário)
- * - token_endpoint: /oidc/token (acessado pelo servidor)
- * - userinfo_endpoint: /oidc/me (acessado pelo servidor)
- * - jwks_uri: /oidc/jwks (acessado pelo servidor)
+ * URLs PÚBLICAS (acessadas pelo navegador do usuário):
+ * - authorization_endpoint: http://localhost:3000/oidc/auth
+ *   O navegador redireciona o usuário para esta URL para autenticação.
+ *
+ * URLs INTERNAS (acessadas pelo servidor backend via rede Docker):
+ * - token_endpoint: http://janus-service:3000/oidc/token
+ *   O servidor troca o código de autorização pelo token.
+ * - userinfo_endpoint: http://janus-service:3000/oidc/me
+ *   O servidor busca informações do usuário.
+ * - jwks_uri: http://janus-service:3000/oidc/jwks
+ *   O servidor busca as chaves públicas para validar tokens JWT.
  *
  * Variáveis de ambiente:
  * - AUTH_ISSUER_URL: URL pública do issuer (ex: http://localhost:3000/oidc)
@@ -38,41 +43,60 @@ import crypto from "crypto";
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function JanusProvider(clientId: string, clientSecret: string): any {
-  // URL pública do issuer - usada pelo navegador do usuário
+  // URL pública do issuer - usada pelo navegador do usuário para autorização
+  // O navegador precisa acessar localhost:3000 pois é o que o usuário consegue resolver
   const issuerUrl = process.env.AUTH_ISSUER_URL;
+  
   // URL interna para comunicação servidor-servidor no Docker
+  // O servidor backend se comunica com o Janus através da rede Docker interna
   // Se não definida, usa o issuerUrl (para desenvolvimento local sem Docker)
   const internalUrl = process.env.AUTH_JANUS_INTERNAL_URL || issuerUrl;
+
+  console.log("[JanusProvider] Configuração:", {
+    issuerUrl,
+    internalUrl,
+    clientId,
+    debug: process.env.NODE_ENV === "development",
+  });
 
   return {
     id: "janus",
     name: "Janus IDP",
     type: "oauth",
-    // Issuer público - usado para validação
+    // Issuer público - usado para construir URLs de redirecionamento
     issuer: issuerUrl,
     clientId: clientId,
     clientSecret: clientSecret,
-    // Habilita PKCE (Proof Key for Code Exchange)
-    // O NextAuth.js v5 gera automaticamente code_verifier e code_challenge
+    // Habilita PKCE (Proof Key for Code Exchange) e State para proteção CSRF
+    // O Janus IDP exige rigorosamente PKCE, então definimos explicitamente
+    // PKCE: proteção contra interceptação de código de autorização
+    // State: proteção contra ataques CSRF
     checks: ["pkce", "state"],
-    // Endpoint de autorização - URL pública (acessada pelo navegador do usuário)
+    // Configuração de autorização - URL PÚBLICA (acessada pelo navegador do usuário)
+    // O navegador redireciona para o Janus em localhost:3000 para autenticação
     authorization: {
       url: `${issuerUrl}/auth`,
       params: {
         // Escopos solicitados: openid (obrigatório), profile, email, offline_access (para refresh_token)
         scope: process.env.AUTH_SCOPE || "openid profile email offline_access",
-        // Parâmetros PKCE são adicionados automaticamente pelo NextAuth.js
-        // - code_challenge: derivado do code_verifier
-        // - code_challenge_method: S256 (SHA256)
       },
     },
-    // Endpoint de token - URL interna (acessada pelo servidor)
+    // Endpoint de token - URL INTERNA (acessada pelo servidor backend)
+    // O servidor troca o código de autorização pelo token através da rede Docker
     token: `${internalUrl}/token`,
-    // Endpoint de userinfo - URL interna (acessada pelo servidor)
+    // Endpoint de userinfo - URL INTERNA (acessada pelo servidor)
     userinfo: `${internalUrl}/me`,
+    // Endpoint JWKS para verificação de assinatura do id_token - URL INTERNA
+    // O servidor busca as chaves públicas para validar o token JWT
+    jwks_endpoint: `${internalUrl}/jwks`,
+    // Extrai perfil do id_token em vez de fazer requisição userinfo
+    idToken: true,
     // Callback para processar o perfil do usuário retornado pelo Janus
+    // Mapeia os campos do perfil OIDC para o formato esperado pelo NextAuth
     profile(profile: { sub?: string; id?: string; name?: string; email?: string; picture?: string }) {
+      console.log("[JanusProvider] Perfil recebido:", profile);
       return {
+        // O campo 'sub' (subject) é o identificador único do usuário no OIDC
         id: profile.sub || profile.id,
         name: profile.name,
         email: profile.email,
@@ -106,6 +130,8 @@ const authOptions: NextAuthConfig = {
   // Configuração explícita da URL base para evitar problemas de redirecionamento
   // Em produção, defina AUTH_URL no ambiente. Em desenvolvimento, usamos o padrão.
   basePath: "/api/auth",
+  // Adiciona logs de debug para ajudar na solução de problemas
+  debug: process.env.NODE_ENV === "development",
   providers: [
     JanusProvider(
       process.env.AUTH_CLIENT_ID!,
@@ -124,6 +150,12 @@ const authOptions: NextAuthConfig = {
     async jwt({ token, account, user }) {
       // Login inicial - extrai tokens da conta OAuth2
       if (account && user) {
+        console.log("[JWT Callback] Login inicial:", {
+          provider: account.provider,
+          access_token: account.access_token ? "present" : "missing",
+          refresh_token: account.refresh_token ? "present" : "missing",
+          expires_at: account.expires_at,
+        });
         return {
           ...token,
           accessToken: account.access_token,
@@ -142,6 +174,7 @@ const authOptions: NextAuthConfig = {
       // Access token expirou, tenta renová-lo usando refresh_token
       if (token.refreshToken) {
         try {
+          console.log("[JWT Callback] Tentando renovar token");
           const issuerUrl = process.env.AUTH_ISSUER_URL;
           const internalUrl = process.env.AUTH_JANUS_INTERNAL_URL || issuerUrl;
           
@@ -163,6 +196,7 @@ const authOptions: NextAuthConfig = {
           }
 
           const tokens = await response.json();
+          console.log("[JWT Callback] Token renovado com sucesso");
           
           return {
             ...token,
@@ -171,7 +205,7 @@ const authOptions: NextAuthConfig = {
             expiresAt: Date.now() + (tokens.expires_in * 1000),
           };
         } catch (error) {
-          console.error("Erro ao renovar token:", error);
+          console.error("[JWT Callback] Erro ao renovar token:", error);
           return {
             ...token,
             error: "RefreshAccessTokenError",
@@ -192,6 +226,11 @@ const authOptions: NextAuthConfig = {
      * e rotas de API. Isso permite chamadas fetch autenticadas para a API de backend.
      */
     async session({ session, token }) {
+      console.log("[Session Callback] Criando sessão:", {
+        user: session.user?.email,
+        accessToken: token.accessToken ? "present" : "missing",
+        error: token.error,
+      });
       if (session.user) {
         session.accessToken = token.accessToken as string | undefined;
         session.refreshToken = token.refreshToken as string | undefined;
@@ -204,15 +243,54 @@ const authOptions: NextAuthConfig = {
     signIn: "/auth/signin",
     error: "/auth/error",
   },
+  // Eventos para rastrear o fluxo de autenticação
+  events: {
+    async signIn({ user, account, profile }) {
+      console.log("[Event] SignIn:", {
+        user: user?.email,
+        provider: account?.provider,
+        expiresAt: account?.expires_at,
+      });
+    },
+    async createUser({ user }) {
+      console.log("[Event] CreateUser:", { user: user?.email });
+    },
+    async updateUser({ user }) {
+      console.log("[Event] UpdateUser:", { user: user?.email });
+    },
+    async linkAccount({ user, account }) {
+      console.log("[Event] LinkAccount:", {
+        user: user?.email,
+        provider: account?.provider,
+      });
+    },
+    async session({ session }) {
+      console.log("[Event] Session:", { user: session?.user?.email });
+    },
+  },
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  debug: process.env.NODE_ENV === "development",
+  // Configuração de cookies para funcionar corretamente no Docker
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
 };
 
 // Inicializa o NextAuth com a configuração
-const { handlers } = NextAuth(authOptions);
+const { handlers, auth } = NextAuth(authOptions);
 
 // Exporta os handlers GET e POST para as rotas de API
 export const { GET, POST } = handlers;
+
+// Exporta a função auth para uso em proxy e componentes do servidor
+export { auth };

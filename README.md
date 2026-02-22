@@ -81,7 +81,7 @@ ux-auditor-dashboard/
 │   └── authenticated-fetch.ts  # Helper de fetch autenticado
 ├── types/                 # Definições TypeScript
 ├── docs/                  # Documentação
-├── middleware.ts          # Middleware de proteção de rotas
+├── proxy.ts               # Proxy de proteção de rotas (migrado de middleware.ts)
 └── .env.local.example     # Template de variáveis de ambiente
 ```
 
@@ -120,8 +120,8 @@ npm run lint
 ✅ **PKCE (Proof Key for Code Exchange)** - Previne interceptação de código de autorização  
 ✅ **Parâmetro State** - Proteção contra CSRF  
 ✅ **Gerenciamento de Tokens** - Tratamento de access_token e refresh_token  
-✅ **Renovação Automática de Tokens** - Refresh automático usando refresh_token  
-✅ **Proteção de Rotas** - Autenticação baseada em middleware  
+✅ **Renovação Automática de Tokens** - Refresh automático usando refresh_token
+✅ **Proteção de Rotas** - Autenticação baseada em proxy
 ✅ **Cookies de Sessão Criptografados** - Assinados com `AUTH_SECRET`
 
 ## Licença

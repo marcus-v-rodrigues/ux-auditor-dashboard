@@ -9,7 +9,7 @@ O sistema de autenticação implementa:
 - **Parâmetro State**: Proteção contra CSRF
 - **Gerenciamento de Tokens**: Tratamento de access_token e refresh_token
 - **Renovação Automática de Tokens**: Refresh automático usando refresh_token
-- **Proteção de Rotas**: Autenticação baseada em middleware
+- **Proteção de Rotas**: Autenticação baseada em proxy
 - **Fetch Autenticado**: Chamadas de API do lado do servidor com injeção automática de token
 
 ## Fluxo PKCE (Proof Key for Code Exchange)
@@ -94,8 +94,8 @@ graph LR
 - Callback de sessão para expor o access_token aos componentes do servidor
 - **Renovação automática de tokens usando refresh_token**
 
-### 2. Middleware para Proteção de Rotas
-**Arquivo:** [`../middleware.ts`](../middleware.ts:1)
+### 2. Proxy para Proteção de Rotas
+**Arquivo:** [`../proxy.ts`](../proxy.ts:1)
 
 - Protege todas as rotas do dashboard
 - Redireciona usuários não autenticados para a página de login
@@ -135,7 +135,7 @@ graph TD
     A --> D[types]
     A --> E[docs]
     A --> F[.env.local.example]
-    A --> G[middleware.ts]
+    A --> G[proxy.ts]
     
     B --> B1[api/auth/[...nextauth]/route.ts]
     B --> B2[auth/signin/page.tsx]
@@ -168,7 +168,10 @@ AUTH_URL=http://localhost:3001
 AUTH_SECRET=seu-secret-key-aqui-gerado-com-openssl-rand-base64-32
 
 # Configuração OAuth2 do Janus IDP com PKCE
+# URL pública do issuer - usada pelo navegador do usuário para autorização
 AUTH_ISSUER_URL=http://localhost:3000/oidc
+# URL interna para comunicação servidor-servidor no Docker (obrigatória em ambiente Docker)
+AUTH_JANUS_INTERNAL_URL=http://janus-service:3000/oidc
 AUTH_CLIENT_ID=ux-auditor
 AUTH_CLIENT_SECRET=janus_dashboard_secret
 AUTH_SCOPE=openid profile email offline_access
@@ -178,11 +181,28 @@ UX_AUDITOR_API_URL=http://localhost:8000
 ```
 
 **Notas Importantes:**
-- `AUTH_ISSUER_URL`: URL pública do issuer OIDC do Janus IDP
+- `AUTH_ISSUER_URL`: URL pública do issuer OIDC do Janus IDP (acessada pelo navegador do usuário)
+- `AUTH_JANUS_INTERNAL_URL`: URL interna para comunicação servidor-servidor no Docker. **Obrigatória quando executando em containers Docker**. Deve usar o nome do serviço Docker (`janus-service`) para resolver corretamente na rede interna.
 - `AUTH_CLIENT_ID`: Deve ser `ux-auditor` conforme especificado
 - `AUTH_CLIENT_SECRET`: Deve ser `janus_dashboard_secret` conforme especificado
 - `AUTH_SCOPE`: Deve incluir `offline_access` para obter refresh_token
 - O callback URL deve ser registrado no Janus IDP: `http://localhost:3001/api/auth/callback/janus`
+
+### Separação de URLs (Frontend vs Backend)
+
+Devido ao conflito de DNS entre containers Docker e o navegador do usuário, os endpoints são separados:
+
+| Endpoint | URL | Acessado Por |
+|----------|-----|--------------|
+| Authorization | `http://localhost:3000/oidc/auth` | Navegador do usuário |
+| Token | `http://janus-service:3000/oidc/token` | Servidor backend |
+| UserInfo | `http://janus-service:3000/oidc/me` | Servidor backend |
+| JWKS | `http://janus-service:3000/oidc/jwks` | Servidor backend |
+
+**Por que essa separação?**
+- O navegador do usuário não consegue resolver nomes de serviços Docker (`janus-service`)
+- O servidor backend não consegue acessar `localhost` do host quando está em um container
+- A solução usa URLs públicas para o navegador e URLs internas para o backend
 
 ### Gerar AUTH_SECRET
 
@@ -215,6 +235,8 @@ AUTH_SECRET=seu-secret-key-aqui
 
 # Configuração OAuth2 do Janus IDP com PKCE
 AUTH_ISSUER_URL=http://localhost:3000/oidc
+# Para ambiente Docker, descomente a linha abaixo:
+# AUTH_JANUS_INTERNAL_URL=http://janus-service:3000/oidc
 AUTH_CLIENT_ID=ux-auditor
 AUTH_CLIENT_SECRET=janus_dashboard_secret
 AUTH_SCOPE=openid profile email offline_access
@@ -255,7 +277,7 @@ npm run dev
 Usuários são redirecionados automaticamente para a página de login ao acessar rotas protegidas:
 
 ```tsx
-// O middleware lida com isso automaticamente
+// O proxy lida com isso automaticamente
 // Acesse qualquer rota protegida, ex: http://localhost:3000/dashboard
 // O usuário será redirecionado para /auth/signin
 ```
@@ -429,7 +451,7 @@ graph TD
 
 ### Proteção de Rotas
 
-O middleware protege todas as rotas exceto:
+O proxy protege todas as rotas exceto:
 - `/api/auth/*`: Endpoints do NextAuth
 - `/auth/*`: Páginas de autenticação
 - `/_next/*`: Arquivos internos do Next.js
@@ -584,25 +606,25 @@ Verifique:
 ### Middleware não protegendo rotas
 
 Verifique:
-1. Middleware está na raiz do projeto (`middleware.ts`)
+1. Proxy está na raiz do projeto (`proxy.ts`)
 2. Configuração do matcher está correta
-3. Sem middleware conflitante
+3. Sem proxy conflitante
 
 ## Resumo de Recursos de Segurança
 
 ✅ **PKCE (Proof Key for Code Exchange)** - Previne interceptação de código de autorização  
 ✅ **Parâmetro State** - Proteção contra CSRF  
 ✅ **Gerenciamento de Tokens** - Tratamento de access_token e refresh_token  
-✅ **Renovação Automática de Tokens** - Refresh automático usando refresh_token  
-✅ **Proteção de Rotas** - Autenticação baseada em middleware  
-✅ **Cookies de Sessão Criptografados** - Assinados com `AUTH_SECRET`  
+✅ **Renovação Automática de Tokens** - Refresh automático usando refresh_token
+✅ **Proteção de Rotas** - Autenticação baseada em proxy
+✅ **Cookies de Sessão Criptografados** - Assinados com `AUTH_SECRET`
 ✅ **Chamadas de API com Tipagem** - Suporte completo TypeScript
 
 ## Próximos Passos
 
 1. **Configurar o Janus IDP**: Configure sua instância do Janus IDP e registre a aplicação
 2. **Atualizar URIs de Redirecionamento**: Adicione `http://localhost:3001/api/auth/callback/janus` ao seu cliente do Janus IDP
-3. **Adicionar Controle de Acesso Baseado em Roles**: Estenda o middleware para controle de acesso baseado em roles
+3. **Adicionar Controle de Acesso Baseado em Roles**: Estenda o proxy para controle de acesso baseado em roles
 4. **Testar Integração**: Verifique o fluxo de autenticação com sua API de backend
 
 ## Melhores Práticas
