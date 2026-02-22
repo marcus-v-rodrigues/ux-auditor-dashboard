@@ -6,8 +6,10 @@ import { InsightsPanel } from '@/components/player/InsightsPanel';
 import VideoPlayer from '@/components/player/VideoPlayer';
 import { FileUploader } from '@/components/FileUploader';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, FileJson, Sparkles, AlertCircle } from 'lucide-react';
 import { InsightEvent, TelemetryLog, SessionProcessResponse, PsychometricData, IntentAnalysis } from '@/types/dashboard';
+import { authenticatedPost } from '@/lib/authenticated-fetch';
 
 /**
  * Página principal do Dashboard UX Auditor
@@ -91,7 +93,10 @@ export default function DashboardPage() {
    * 1. Preprocessor - Pré-processa os eventos rrweb
    * 2. Isolation Forest - Detecta anomalias estatísticas
    * 3. Heurísticas - Aplica regras de UX pré-definidas
-   * 4. LLM - Gera insights narrativos com IA
+   * 4. LLM - Gera insights narrativos com IA (Hermes-405B)
+   * 
+   * Utiliza authenticatedPost para injetar automaticamente o token JWT do Janus
+   * no cabeçalho Authorization, garantindo autenticação segura com o backend.
    * 
    * @throws Error se a sessão não estiver disponível ou a API falhar
    */
@@ -107,36 +112,15 @@ export default function DashboardPage() {
     setIsProcessing(true);
 
     try {
-      // Obtém a URL base da API das variáveis de ambiente
-      const baseUrl = process.env.NEXT_PUBLIC_UX_AUDITOR_API_URL || "http://localhost:8000";
-      
-      // Monta a URL do endpoint de processamento
+      // Monta o endpoint de processamento
       const endpoint = `/sessions/${sessionUuid}/process`;
-      const url = `${baseUrl}${endpoint}`;
 
-      // Faz a requisição POST para disparar o pipeline de análise
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      // Verifica se a resposta foi bem-sucedida
-      if (!response.ok) {
-        // Tenta extrair a mensagem de erro do corpo da resposta
-        let errorMsg = `Erro HTTP ${response.status}: ${response.statusText}`;
-        try {
-          const errorData = await response.json();
-          errorMsg = errorData.message || errorData.error || errorMsg;
-        } catch {
-          // Se não conseguir parsear o JSON, usa a mensagem padrão
-        }
-        throw new Error(errorMsg);
-      }
-
-      // Parseia a resposta JSON
-      const data: SessionProcessResponse = await response.json();
+      // Usa authenticatedPost para fazer a requisição com token JWT do Janus
+      // O helper injeta automaticamente o header Authorization: Bearer <token>
+      const data: SessionProcessResponse = await authenticatedPost<SessionProcessResponse>(
+        endpoint,
+        {} // Corpo vazio - o backend usa o sessionUuid para identificar a sessão
+      );
 
       // Mapeia a resposta para os estados reativos da aplicação
       // Isso garante que os painéis laterais reflitam os dados processados
@@ -159,6 +143,11 @@ export default function DashboardPage() {
       // Atualiza a análise de intenção do usuário
       if (data.intent_analysis) {
         setIntentAnalysis(data.intent_analysis);
+      }
+
+      // Mapeia as ações do usuário para o estado de logs do TelemetryPanel
+      if (data.stats?.user_actions && Array.isArray(data.stats.user_actions)) {
+        setLogs(data.stats.user_actions);
       }
 
     } catch (error) {
@@ -203,7 +192,21 @@ export default function DashboardPage() {
       
       {/* Lado Esquerdo - Painel de Telemetria */}
       <aside className="w-[280px] hidden md:block z-20 shadow-xl border-r border-border">
-        <TelemetryPanel logs={logs} currentTime={currentTime} />
+        {/* Exibe Skeleton durante o processamento da IA para evitar interface "congelada" */}
+        {isProcessing && logs.length === 0 ? (
+          <div className="flex flex-col h-full bg-card border-r border-border">
+            <div className="p-4 border-b border-border bg-card/50">
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <div className="flex-1 p-2 space-y-2">
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <TelemetryPanel logs={logs} currentTime={currentTime} />
+        )}
       </aside>
 
       {/* Centro (Palco Principal) */}
@@ -298,12 +301,43 @@ export default function DashboardPage() {
 
       {/* Lado Direito - Painel de Insights */}
       <aside className="w-[300px] hidden lg:block z-20 shadow-xl border-l border-border">
-        <InsightsPanel 
-          insights={insights} 
-          currentTime={currentTime}
-          psychometrics={psychometrics}
-          intentAnalysis={intentAnalysis}
-        />
+        {/* Exibe Skeleton durante o processamento da IA para evitar interface "congelada" */}
+        {isProcessing && insights.length === 0 ? (
+          <div className="flex flex-col h-full bg-card border-l border-border">
+            <div className="p-4 border-b border-border bg-card/50">
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <div className="flex-1 p-4 space-y-4">
+              {/* Skeleton para seção de Psicometria */}
+              <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
+                <Skeleton className="h-4 w-24 mb-3" />
+                <Skeleton className="h-2 w-full mb-2" />
+                <Skeleton className="h-2 w-full mb-2" />
+                <Skeleton className="h-2 w-full" />
+              </div>
+              {/* Skeleton para seção de Intenção */}
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md">
+                <Skeleton className="h-4 w-28 mb-3" />
+                <Skeleton className="h-3 w-full mb-2" />
+                <Skeleton className="h-2 w-3/4" />
+              </div>
+              {/* Skeleton para lista de anomalias */}
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full" />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <InsightsPanel 
+            insights={insights} 
+            currentTime={currentTime}
+            psychometrics={psychometrics}
+            intentAnalysis={intentAnalysis}
+            narrative={narrative}
+          />
+        )}
       </aside>
 
     </div>

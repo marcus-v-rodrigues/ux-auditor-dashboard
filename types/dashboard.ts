@@ -27,6 +27,14 @@ export interface TelemetryLog {
 }
 
 /**
+ * Estatísticas de ações do usuário durante a sessão
+ */
+export interface SessionStats {
+  // Ações do usuário extraídas durante o processamento
+  user_actions: TelemetryLog[];
+}
+
+/**
  * Interface para a resposta do endpoint de processamento de sessão
  * Contém os dados processados pelo pipeline de IA (Preprocessor, Isolation Forest, Heurísticas e LLM)
  */
@@ -39,6 +47,8 @@ export interface SessionProcessResponse {
   psychometrics: PsychometricData;
   // Análise de intenção do usuário
   intent_analysis: IntentAnalysis;
+  // Estatísticas e ações do usuário durante a sessão
+  stats?: SessionStats;
 }
 
 /**
