@@ -114,6 +114,8 @@ const authOptions: NextAuthConfig = {
   debug: process.env.NODE_ENV === "development",
 };
 
-const handler = NextAuth(authOptions);
+// Inicializa o NextAuth com a configuração
+const { handlers } = NextAuth(authOptions);
 
-export { handler as GET, handler as POST };
+// Exporta os handlers GET e POST para as rotas de API
+export const { GET, POST } = handlers;

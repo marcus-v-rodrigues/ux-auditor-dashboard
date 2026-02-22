@@ -22,3 +22,21 @@ declare module "next-auth" {
     error?: string;
   }
 }
+
+/**
+ * Interface JWT Estendida
+ *
+ * Adiciona propriedades personalizadas ao objeto JWT do NextAuth:
+ * - accessToken: Token de acesso JWT para chamadas de API
+ * - refreshToken: Token de refresh JWT para renovação de token
+ * - expiresAt: Timestamp de expiração do token
+ * - error: Mensagem de erro se o refresh de token falhar
+ */
+declare module "next-auth/jwt" {
+  interface JWT {
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: number;
+    error?: string;
+  }
+}

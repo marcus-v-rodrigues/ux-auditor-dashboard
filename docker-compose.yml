@@ -43,7 +43,7 @@ services:
     
     # Conexão com a rede externa do ecossistema
     networks:
-      - ux_auditor_network
+      - ux-auditor-network
     
     # Política de reinício
     restart: unless-stopped
@@ -56,9 +56,9 @@ networks:
   # Rede Externa do Ecossistema UX Auditor
   # ---------------------------------------------------------------------------
   # Esta rede DEVE ser criada previamente antes de executar o docker-compose.
-  # Comando para criar: docker network create ux_auditor_network
+  # Comando para criar: docker network create ux-auditor-network
   # A rede é compartilhada entre todos os microsserviços do ecossistema,
   # permitindo a comunicação entre os containers.
   # ---------------------------------------------------------------------------
-  ux_auditor_network:
+  ux-auditor-network:
     external: true

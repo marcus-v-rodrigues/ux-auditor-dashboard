@@ -2,12 +2,19 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export default function SignInPage({
+/**
+ * Página de Sign In
+ * Permite autenticação via Janus IDP
+ * Nota: searchParams é assíncrono no Next.js 15+
+ */
+export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: { callbackUrl?: string };
+  searchParams: Promise<{ callbackUrl?: string }>;
 }) {
-  const callbackUrl = searchParams.callbackUrl || "/";
+  // Resolve a Promise do searchParams (Next.js 15+)
+  const params = await searchParams;
+  const callbackUrl = params.callbackUrl || "/";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
