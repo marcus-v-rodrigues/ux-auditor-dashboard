@@ -20,8 +20,7 @@ services:
   # de Identidade externo (ex: Keycloak, Auth0, etc).
   # ---------------------------------------------------------------------------
   ux-auditor-dashboard:
-    # Nome do container (obrigatoriamente com underline)
-    container_name: ux_auditor_dashboard
+    container_name: ux-auditor-dashboard
     
     # Build do diretório atual
     build: .

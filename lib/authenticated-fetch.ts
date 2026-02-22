@@ -46,8 +46,13 @@ async function getSession(): Promise<Session | null> {
   
   // Busca sessão da API do NextAuth
   // Nota: NextAuth v5 usa AUTH_URL (não NEXTAUTH_URL)
+  // Importante: Usa AUTH_INTERNAL_URL para comunicação entre containers Docker
+  // O AUTH_INTERNAL_URL deve apontar para o nome do serviço no compose (ex: ux_auditor_dashboard:3001)
+  // Isso é necessário porque AUTH_URL é usado pelo navegador para redirecionamentos
+  // e deve permanecer como localhost:3001
   try {
-    const response = await fetch(new URL("/api/auth/session", process.env.AUTH_URL || "http://localhost:3001"), {
+    const internalUrl = process.env.AUTH_INTERNAL_URL || "http://ux-auditor-dashboard:3001";
+    const response = await fetch(`${internalUrl}/api/auth/session`, {
       headers: {
         cookie: `next-auth.session-token=${sessionToken}`,
       },

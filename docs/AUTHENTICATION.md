@@ -158,13 +158,17 @@ graph TD
 
 ## Configuração
 
-### Variáveis de Ambiente
+### Variáveis de Ambiente do Dashboard (Next.js)
 
 Crie um arquivo `.env.local` na raiz do projeto:
 
 ```bash
 # Configuração do NextAuth (v5 usa AUTH_URL e AUTH_SECRET)
+# URL pública para redirecionamentos do navegador
 AUTH_URL=http://localhost:3001
+# URL interna para comunicação entre containers Docker (usada por getSession)
+# Em ambiente Docker, aponta para o nome do serviço no compose
+AUTH_INTERNAL_URL=http://ux_auditor_dashboard:3001
 AUTH_SECRET=seu-secret-key-aqui-gerado-com-openssl-rand-base64-32
 
 # Configuração OAuth2 do Janus IDP com PKCE
@@ -181,12 +185,35 @@ UX_AUDITOR_API_URL=http://localhost:8000
 ```
 
 **Notas Importantes:**
+- `AUTH_URL`: URL pública usada para redirecionamentos do navegador. Deve ser `http://localhost:3001` para que o navegador consiga acessar.
+- `AUTH_INTERNAL_URL`: URL interna para comunicação entre containers Docker. Usada pela função `getSession()` em [`authenticated-fetch.ts`](../lib/authenticated-fetch.ts:39) para buscar a sessão internamente. Em ambiente Docker, deve apontar para o nome do container (`ux_auditor_dashboard:3001`).
 - `AUTH_ISSUER_URL`: URL pública do issuer OIDC do Janus IDP (acessada pelo navegador do usuário)
 - `AUTH_JANUS_INTERNAL_URL`: URL interna para comunicação servidor-servidor no Docker. **Obrigatória quando executando em containers Docker**. Deve usar o nome do serviço Docker (`janus-service`) para resolver corretamente na rede interna.
 - `AUTH_CLIENT_ID`: Deve ser `ux-auditor` conforme especificado
 - `AUTH_CLIENT_SECRET`: Deve ser `janus_dashboard_secret` conforme especificado
 - `AUTH_SCOPE`: Deve incluir `offline_access` para obter refresh_token
 - O callback URL deve ser registrado no Janus IDP: `http://localhost:3001/api/auth/callback/janus`
+
+### Variáveis de Ambiente da API (FastAPI Backend)
+
+A API FastAPI precisa validar os tokens JWT emitidos pelo Janus IDP. Configure as seguintes variáveis:
+
+```bash
+# URL do JWKS para validação de assinatura JWT (acesso interno pela rede Docker)
+AUTH_JWKS_URL=http://janus-service:3000/oidc/jwks
+
+# URL do emissor (issuer) - deve ser idêntico ao valor gerado pelo Janus para o navegador
+# IMPORTANTE: Este valor deve corresponder exatamente ao `iss` no token JWT
+AUTH_ISSUER_URL=http://localhost:3000/oidc
+
+# Algoritmo de assinatura JWT (RS256 para assinatura assimétrica do Janus)
+JWT_ALGORITHM=RS256
+```
+
+**Notas Importantes:**
+- `AUTH_JWKS_URL`: Usa a URL interna (`janus-service`) porque a API roda em container e precisa acessar o JWKS pela rede Docker
+- `AUTH_ISSUER_URL`: Deve ser `http://localhost:3000/oidc` (URL pública) porque o Janus IDP usa essa URL como `iss` nos tokens. A API valida isso contra o valor no token.
+- `JWT_ALGORITHM`: Deve ser `RS256` para suportar a assinatura assimétrica do Janus IDP
 
 ### Separação de URLs (Frontend vs Backend)
 
@@ -230,7 +257,10 @@ Edite `.env.local`:
 
 ```bash
 # Configuração do NextAuth (v5 usa AUTH_URL e AUTH_SECRET)
+# URL pública para redirecionamentos do navegador
 AUTH_URL=http://localhost:3001
+# URL interna para comunicação entre containers Docker (ambiente Docker)
+# AUTH_INTERNAL_URL=http://ux_auditor_dashboard:3001
 AUTH_SECRET=seu-secret-key-aqui
 
 # Configuração OAuth2 do Janus IDP com PKCE
@@ -610,15 +640,58 @@ Verifique:
 2. Configuração do matcher está correta
 3. Sem proxy conflitante
 
+## Sincronização de Secrets
+
+### AUTH_SECRET
+
+O `AUTH_SECRET` é usado para criptografar e assinar o cookie de sessão JWT do NextAuth. **Deve ser idêntico** em todos os serviços que precisam validar a sessão via cookies.
+
+```bash
+# Gerar AUTH_SECRET
+openssl rand -base64 32
+```
+
+**Importante:**
+- O Dashboard e qualquer serviço que tente validar a sessão via cookies deve ter o mesmo `AUTH_SECRET`
+- Se o secret for diferente, a validação do cookie falhará
+
+### JWT_ALGORITHM
+
+O algoritmo de assinatura JWT deve ser `RS256` em todos os serviços para suportar a assinatura assimétrica do Janus IDP:
+
+```bash
+# Dashboard e API devem usar
+JWT_ALGORITHM=RS256
+```
+
+**Por que RS256?**
+- O Janus IDP usa chaves assimétricas (RSA) para assinar tokens
+- A chave privada fica no Janus IDP
+- A chave pública é exposta via JWKS endpoint (`/oidc/jwks`)
+- A API valida a assinatura usando a chave pública do JWKS
+
+### Resumo de Configuração
+
+| Serviço | Variável | Valor |
+|---------|----------|-------|
+| Dashboard | `AUTH_SECRET` | Mesmo valor em todos |
+| Dashboard | `AUTH_URL` | `http://localhost:3001` (público, navegador) |
+| Dashboard | `AUTH_INTERNAL_URL` | `http://ux_auditor_dashboard:3001` (interno, Docker) |
+| Dashboard | `AUTH_JANUS_INTERNAL_URL` | `http://janus-service:3000/oidc` |
+| API Backend | `AUTH_JWKS_URL` | `http://janus-service:3000/oidc/jwks` |
+| API Backend | `AUTH_ISSUER_URL` | `http://localhost:3000/oidc` |
+| API Backend | `JWT_ALGORITHM` | `RS256` |
+
 ## Resumo de Recursos de Segurança
 
-✅ **PKCE (Proof Key for Code Exchange)** - Previne interceptação de código de autorização  
-✅ **Parâmetro State** - Proteção contra CSRF  
-✅ **Gerenciamento de Tokens** - Tratamento de access_token e refresh_token  
+✅ **PKCE (Proof Key for Code Exchange)** - Previne interceptação de código de autorização
+✅ **Parâmetro State** - Proteção contra CSRF
+✅ **Gerenciamento de Tokens** - Tratamento de access_token e refresh_token
 ✅ **Renovação Automática de Tokens** - Refresh automático usando refresh_token
 ✅ **Proteção de Rotas** - Autenticação baseada em proxy
 ✅ **Cookies de Sessão Criptografados** - Assinados com `AUTH_SECRET`
 ✅ **Chamadas de API com Tipagem** - Suporte completo TypeScript
+✅ **Assinatura Assimétrica JWT** - RS256 com chaves do Janus IDP
 
 ## Próximos Passos
 
