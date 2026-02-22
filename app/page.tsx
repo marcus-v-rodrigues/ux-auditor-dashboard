@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, FileJson, Sparkles, AlertCircle } from 'lucide-react';
 import { InsightEvent, TelemetryLog, SessionProcessResponse, PsychometricData, IntentAnalysis } from '@/types/dashboard';
-import { authenticatedPost } from '@/lib/authenticated-fetch';
 
 /**
  * Página principal do Dashboard UX Auditor
@@ -95,8 +94,8 @@ export default function DashboardPage() {
    * 3. Heurísticas - Aplica regras de UX pré-definidas
    * 4. LLM - Gera insights narrativos com IA (Hermes-405B)
    * 
-   * Utiliza authenticatedPost para injetar automaticamente o token JWT do Janus
-   * no cabeçalho Authorization, garantindo autenticação segura com o backend.
+   * Faz requisição para a API local que atua como proxy,
+   * mantendo a autenticação no servidor.
    * 
    * @throws Error se a sessão não estiver disponível ou a API falhar
    */
@@ -112,15 +111,25 @@ export default function DashboardPage() {
     setIsProcessing(true);
 
     try {
-      // Monta o endpoint de processamento
-      const endpoint = `/sessions/${sessionUuid}/process`;
+      // Monta o endpoint de processamento local (proxy para a API externa)
+      const endpoint = `/api/sessions/${sessionUuid}/process`;
 
-      // Usa authenticatedPost para fazer a requisição com token JWT do Janus
-      // O helper injeta automaticamente o header Authorization: Bearer <token>
-      const data: SessionProcessResponse = await authenticatedPost<SessionProcessResponse>(
-        endpoint,
-        {} // Corpo vazio - o backend usa o sessionUuid para identificar a sessão
-      );
+      // Faz a requisição para a API local
+      // A autenticação é gerenciada no servidor via sessão NextAuth
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}), // Corpo vazio
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Erro ${response.status}`);
+      }
+
+      const data: SessionProcessResponse = await response.json();
 
       // Mapeia a resposta para os estados reativos da aplicação
       // Isso garante que os painéis laterais reflitam os dados processados
@@ -152,7 +161,7 @@ export default function DashboardPage() {
 
     } catch (error) {
       // Tratamento de erros robusto
-      console.error("Erro durante a análise de IA:", error);
+      console.error("Error during AI analysis:", error);
       
       // Define a mensagem de erro apropriada para exibição na UI
       if (error instanceof Error) {
@@ -160,7 +169,7 @@ export default function DashboardPage() {
       } else if (typeof error === 'string') {
         setErrorMessage(error);
       } else {
-        setErrorMessage("Ocorreu um erro inesperado durante a análise. Por favor, tente novamente.");
+        setErrorMessage("An unexpected error occurred during the analysis. Please try again.");
       }
     } finally {
       // Garante que o estado de processamento seja finalizado
@@ -236,12 +245,12 @@ export default function DashboardPage() {
                  <>
                    {/* Ícone de carregamento animado durante o processamento */}
                    <Sparkles className="h-4 w-4 animate-spin" />
-                   Processando com IA...
+                   Processing with AI...
                  </>
                ) : (
                  <>
                    <Sparkles className="h-4 w-4" />
-                   Iniciar Auditoria de IA
+                   Start AI Audit
                  </>
                )}
              </Button>

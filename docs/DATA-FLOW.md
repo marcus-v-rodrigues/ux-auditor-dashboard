@@ -30,7 +30,7 @@ O POST para `/sessions/{session_uuid}/process` é disparado no arquivo [`app/pag
 ```typescript
 const triggerAnalysis = async () => {
   // ...
-  const baseUrl = process.env.NEXT_PUBLIC_UX_AUDITOR_API_URL || "http://localhost:8000";
+  const baseUrl = process.env.UX_AUDITOR_API_URL || "http://localhost:8000";
   const endpoint = `/sessions/${sessionUuid}/process`;
   const url = `${baseUrl}${endpoint}`;
 

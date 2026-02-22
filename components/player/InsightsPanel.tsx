@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { InsightEvent, PsychometricData, IntentAnalysis } from "@/types/dashboard";
 import { Eye, AlertTriangle, CheckCircle2, Brain, Target, BarChart3 } from "lucide-react";
 import { SemanticSummary } from "./SemanticSummary";
+import { SemanticDiagnostics } from "./SemanticDiagnostics";
 
 /**
  * Interface de props para o componente InsightsPanel
@@ -62,6 +63,17 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
       
       {/* Área de scroll com lista de insights e dados processados */}
       <ScrollArea className="flex-1 p-4">
+        {/* Diagnóstico Semântico Executivo - Resumo da IA no topo do painel */}
+        {narrative && psychometrics && intentAnalysis && (
+          <div className="mb-4">
+            <SemanticDiagnostics
+              narrative={narrative}
+              psychometrics={psychometrics}
+              intent_analysis={intentAnalysis}
+            />
+          </div>
+        )}
+
         {/* Seção de Dados Psicométricos - Exibida quando disponível */}
         {psychometrics && (
           <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">

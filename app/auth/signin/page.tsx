@@ -1,4 +1,5 @@
 import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function SignInPage({
@@ -36,6 +37,16 @@ export default function SignInPage({
           <p>
             By signing in, you agree to our Terms of Service and Privacy Policy.
           </p>
+        </div>
+
+        <div className="text-center text-sm text-slate-600 dark:text-slate-400">
+          Don't have an account?{" "}
+          <Link
+            href="/auth/register"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Create account
+          </Link>
         </div>
       </div>
     </div>
