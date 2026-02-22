@@ -73,9 +73,9 @@ cp .env.local.example .env.local
 Edite `.env.local`:
 
 ```bash
-# Configuração do NextAuth
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=seu-secret-key-aqui
+# Configuração do NextAuth (v5 usa AUTH_URL e AUTH_SECRET)
+AUTH_URL=http://localhost:3001
+AUTH_SECRET=seu-secret-key-aqui
 
 # Configuração OAuth2 do Janus IDP
 AUTH_ISSUER_URL=https://seu-dominio-vps.com
@@ -87,7 +87,7 @@ AUTH_SCOPE=openid email profile
 UX_AUDITOR_API_URL=http://localhost:8000
 ```
 
-Gere o `NEXTAUTH_SECRET`:
+Gere o `AUTH_SECRET`:
 
 ```bash
 openssl rand -base64 32
@@ -174,7 +174,7 @@ export default async function DataPage() {
 ✅ **Parâmetro State** - Proteção contra CSRF  
 ✅ **Gerenciamento de Tokens** - Tratamento de access_token e refresh_token  
 ✅ **Proteção de Rotas** - Autenticação baseada em middleware  
-✅ **Cookies de Sessão Criptografados** - Assinados com `NEXTAUTH_SECRET`  
+✅ **Cookies de Sessão Criptografados** - Assinados com `AUTH_SECRET`  
 ✅ **Chamadas de API com Tipagem** - Suporte completo TypeScript
 
 ## Estrutura de Arquivos
@@ -218,7 +218,7 @@ ux-auditor-dashboard/
 Veja [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md:1) para guia detalhado de solução de problemas.
 
 Problemas comuns:
-- **"Usuário não autenticado"**: Verifique `NEXTAUTH_SECRET` e cookie de sessão
+- **"Usuário não autenticado"**: Verifique `AUTH_SECRET` e cookie de sessão
 - **"Credenciais de cliente inválidas"**: Verifique client ID e secret do Janus IDP
 - **"Token expirado"**: Implemente lógica de refresh de token
 - **Middleware não funcionando**: Certifique-se de que o middleware está na raiz do projeto

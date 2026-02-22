@@ -1,24 +1,53 @@
 import NextAuth, { NextAuthConfig } from "next-auth";
-import type { OAuthConfig, OAuthUserConfig } from "next-auth/providers";
 
 /**
- * Provedor OAuth2 Personalizado para Janus IDP
- * Implementa PKCE e State para proteção contra CSRF
+ * Provedor OIDC Personalizado para Janus IDP
+ *
+ * NOTA IMPORTANTE sobre comunicação Docker:
+ * O container do dashboard precisa se comunicar com o Janus IDP para descoberta OIDC
+ * e troca de tokens. No ambiente Docker, usamos o nome do serviço (janus-service)
+ * para comunicação interna, mas o issuer permanece como localhost para que o
+ * navegador do usuário possa acessar os endpoints de autorização.
+ *
+ * O Janus IDP expõe os seguintes endpoints:
+ * - authorization_endpoint: /oidc/auth (acessado pelo navegador do usuário)
+ * - token_endpoint: /oidc/token (acessado pelo servidor)
+ * - userinfo_endpoint: /oidc/me (acessado pelo servidor)
+ * - jwks_uri: /oidc/jwks (acessado pelo servidor)
+ *
+ * Variáveis de ambiente:
+ * - AUTH_ISSUER_URL: URL pública do issuer (ex: http://localhost:3000/oidc)
+ * - AUTH_JANUS_INTERNAL_URL: URL interna para comunicação Docker (ex: http://janus-service:3000/oidc)
  */
-function JanusProvider(options: any): OAuthConfig<any> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function JanusProvider(clientId: string, clientSecret: string): any {
+  // URL pública do issuer - usada pelo navegador do usuário
+  const issuerUrl = process.env.AUTH_ISSUER_URL;
+  // URL interna para comunicação servidor-servidor no Docker
+  // Se não definida, usa o issuerUrl (para desenvolvimento local sem Docker)
+  const internalUrl = process.env.AUTH_JANUS_INTERNAL_URL || issuerUrl;
+
   return {
     id: "janus",
     name: "Janus IDP",
     type: "oauth",
+    // Issuer público - usado para validação
+    issuer: issuerUrl,
+    clientId: clientId,
+    clientSecret: clientSecret,
+    // Endpoint de autorização - URL pública (acessada pelo navegador do usuário)
     authorization: {
+      url: `${issuerUrl}/auth`,
       params: {
-        grant_type: "authorization_code",
-        response_type: "code",
+        scope: process.env.AUTH_SCOPE || "openid email profile",
       },
     },
-    token: `${process.env.AUTH_ISSUER_URL}/oauth2/token`,
-    userinfo: `${process.env.AUTH_ISSUER_URL}/oauth2/userinfo`,
-    profile(profile: any) {
+    // Endpoint de token - URL interna (acessada pelo servidor)
+    token: `${internalUrl}/token`,
+    // Endpoint de userinfo - URL interna (acessada pelo servidor)
+    userinfo: `${internalUrl}/me`,
+    // Callback para processar o perfil do usuário retornado pelo Janus
+    profile(profile: { sub?: string; id?: string; name?: string; email?: string; picture?: string }) {
       return {
         id: profile.sub || profile.id,
         name: profile.name,
@@ -26,7 +55,6 @@ function JanusProvider(options: any): OAuthConfig<any> {
         image: profile.picture || null,
       };
     },
-    options,
   };
 }
 
@@ -39,19 +67,19 @@ function JanusProvider(options: any): OAuthConfig<any> {
  * - Parâmetro State para proteção contra CSRF
  * - Gerenciamento de tokens com access_token e refresh_token
  * - Callback de sessão para expor o access_token aos componentes do servidor
+ *
+ * NOTA: No NextAuth v5, use AUTH_URL (não NEXTAUTH_URL) para configurar a URL base.
+ * Exemplo: AUTH_URL=http://localhost:3001
  */
 const authOptions: NextAuthConfig = {
+  // Configuração explícita da URL base para evitar problemas de redirecionamento
+  // Em produção, defina AUTH_URL no ambiente. Em desenvolvimento, usamos o padrão.
+  basePath: "/api/auth",
   providers: [
-    JanusProvider({
-      clientId: process.env.AUTH_CLIENT_ID!,
-      clientSecret: process.env.AUTH_CLIENT_SECRET!,
-      authorization: {
-        url: `${process.env.AUTH_ISSUER_URL}/oauth2/authorize`,
-        params: {
-          scope: process.env.AUTH_SCOPE || "openid email profile",
-        },
-      },
-    }),
+    JanusProvider(
+      process.env.AUTH_CLIENT_ID!,
+      process.env.AUTH_CLIENT_SECRET!
+    ),
   ],
   callbacks: {
     /**

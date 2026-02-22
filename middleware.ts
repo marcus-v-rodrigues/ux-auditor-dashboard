@@ -21,9 +21,10 @@ import { getToken } from "next-auth/jwt";
  */
 export async function middleware(req: NextRequest) {
   // Obtém o token da requisição
+  // Nota: NextAuth v5 usa AUTH_SECRET (não NEXTAUTH_SECRET)
   const token = await getToken({
     req,
-    secret: process.env.NEXTAUTH_SECRET
+    secret: process.env.AUTH_SECRET
   });
   
   // Verifica se o usuário está autenticado

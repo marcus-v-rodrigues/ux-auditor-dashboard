@@ -45,8 +45,9 @@ async function getSession(): Promise<Session | null> {
   }
   
   // Busca sessão da API do NextAuth
+  // Nota: NextAuth v5 usa AUTH_URL (não NEXTAUTH_URL)
   try {
-    const response = await fetch(new URL("/api/auth/session", process.env.NEXTAUTH_URL || "http://localhost:3000"), {
+    const response = await fetch(new URL("/api/auth/session", process.env.AUTH_URL || "http://localhost:3001"), {
       headers: {
         cookie: `next-auth.session-token=${sessionToken}`,
       },

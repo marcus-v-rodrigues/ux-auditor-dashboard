@@ -55,9 +55,9 @@ ux-auditor-dashboard/
 Crie um arquivo `.env.local` na raiz do projeto:
 
 ```bash
-# Configuração do NextAuth
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=seu-secret-key-aqui-gerado-com-openssl-rand-base64-32
+# Configuração do NextAuth (v5 usa AUTH_URL e AUTH_SECRET)
+AUTH_URL=http://localhost:3001
+AUTH_SECRET=seu-secret-key-aqui-gerado-com-openssl-rand-base64-32
 
 # Configuração OAuth2 do Janus IDP
 AUTH_ISSUER_URL=https://seu-dominio-vps.com
@@ -69,7 +69,7 @@ AUTH_SCOPE=openid email profile
 UX_AUDITOR_API_URL=http://localhost:8000
 ```
 
-### Gerar NEXTAUTH_SECRET
+### Gerar AUTH_SECRET
 
 ```bash
 openssl rand -base64 32
@@ -195,7 +195,7 @@ O parâmetro state é usado para prevenir ataques CSRF durante o fluxo OAuth2.
 
 - **Access Token**: Armazenado na sessão JWT, acessível em componentes do servidor
 - **Refresh Token**: Armazenado na sessão JWT para renovação de token
-- **Cookie de Sessão**: Criptografado e assinado usando `NEXTAUTH_SECRET`
+- **Cookie de Sessão**: Criptografado e assinado usando `AUTH_SECRET`
 
 ### Proteção de Rotas
 
@@ -300,14 +300,14 @@ export default async function TestAuthPage() {
 Verifique:
 1. Usuário está logado
 2. Cookie de sessão está presente
-3. `NEXTAUTH_SECRET` está configurado corretamente
+3. `AUTH_SECRET` está configurado corretamente
 
 ### "Credenciais de cliente inválidas"
 
 Verifique:
 1. `AUTH_CLIENT_ID` e `AUTH_CLIENT_SECRET` estão corretos
 2. Cliente está registrado no Janus IDP
-3. URI de redirecionamento corresponde (ex: `http://localhost:3000/api/auth/callback/janus`)
+3. URI de redirecionamento corresponde (ex: `http://localhost:3001/api/auth/callback/janus`)
 
 ### "Token expirado"
 

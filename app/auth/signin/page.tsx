@@ -1,6 +1,5 @@
-import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { SignInForm } from "@/components/auth/SignInForm";
 
 /**
  * Página de Sign In
@@ -28,17 +27,7 @@ export default async function SignInPage({
           </p>
         </div>
 
-        <div className="space-y-4">
-          <Button
-            onClick={() =>
-              signIn("janus", { callbackUrl })
-            }
-            className="w-full"
-            size="lg"
-          >
-            Sign in with Janus IDP
-          </Button>
-        </div>
+        <SignInForm callbackUrl={callbackUrl} />
 
         <div className="text-center text-sm text-slate-500 dark:text-slate-400">
           <p>
