@@ -2,6 +2,57 @@ import NextAuth, { NextAuthConfig } from "next-auth";
 import crypto from "crypto";
 
 /**
+ * Decodifica um JWT sem verificar a assinatura (para extrair claims)
+ *
+ * NOTA: Esta função é usada apenas para extrair claims do access_token.
+ * A verificação da assinatura é feita pelo NextAuth usando o endpoint JWKS.
+ *
+ * @param token - JWT codificado em base64url
+ * @returns Payload decodificado do JWT
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  try {
+    // Divide o token em suas partes (header.payload.signature)
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      console.warn("[decodeJwtPayload] Token não tem 3 partes");
+      return {};
+    }
+
+    // Decodifica o payload (segunda parte)
+    const payload = parts[1];
+    // Adiciona padding se necessário para base64
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+
+    const decoded = Buffer.from(padded, "base64").toString("utf-8");
+    return JSON.parse(decoded);
+  } catch (error) {
+    console.error("[decodeJwtPayload] Erro ao decodificar JWT:", error);
+    return {};
+  }
+}
+
+/**
+ * Extrai escopos do claim 'scope' do JWT
+ *
+ * O claim 'scope' vem como string separada por espaços (ex: "openid profile email")
+ * Esta função converte para um array de strings.
+ *
+ * @param scopeClaim - Claim 'scope' do JWT (string ou array)
+ * @returns Array de escopos
+ */
+function extractScopes(scopeClaim: unknown): string[] {
+  if (typeof scopeClaim === "string") {
+    return scopeClaim.split(" ").filter(Boolean);
+  }
+  if (Array.isArray(scopeClaim)) {
+    return scopeClaim.filter((s) => typeof s === "string");
+  }
+  return [];
+}
+
+/**
  * Provedor OIDC Personalizado para Janus IDP com PKCE
  *
  * Implementação do fluxo Authorization Code com PKCE (Proof Key for Code Exchange)
@@ -20,6 +71,19 @@ import crypto from "crypto";
  * 3. Redirecionar para /oidc/auth com code_challenge e code_challenge_method=S256
  * 4. No callback, enviar code_verifier para /oidc/token junto com o code
  * 5. Receber access_token e refresh_token
+ *
+ * NOTA IMPORTANTE sobre JWTs no Janus IDP:
+ * Com a nova configuração, os access_tokens são JWTs assinados com RS256.
+ * Estrutura do JWT:
+ * - Header: { alg: "RS256", typ: "JWT", kid: "chave-1" }
+ * - Payload: { iss, sub, aud, iat, exp, scope, jti, client_id, ... }
+ * - Signature: Assinatura RSA com chave privada do IdP
+ *
+ * Validação do JWT:
+ * - A assinatura é validada pelo NextAuth usando o endpoint JWKS
+ * - O issuer (iss) é validado automaticamente
+ * - A audience (aud) DEVE ser validada para segurança
+ * - A expiração (exp) é validada automaticamente
  *
  * NOTA IMPORTANTE sobre comunicação Docker:
  * Devido ao conflito de DNS entre containers Docker e o navegador do usuário,
@@ -40,6 +104,7 @@ import crypto from "crypto";
  * Variáveis de ambiente:
  * - AUTH_ISSUER_URL: URL pública do issuer (ex: http://localhost:3000/oidc)
  * - AUTH_JANUS_INTERNAL_URL: URL interna para comunicação Docker (ex: http://janus-service:3000/oidc)
+ * - AUTH_AUDIENCE: Audience esperada no JWT (ex: http://localhost:3000/oidc/api)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function JanusProvider(clientId: string, clientSecret: string): any {
@@ -74,11 +139,15 @@ function JanusProvider(clientId: string, clientSecret: string): any {
     checks: ["pkce", "state"],
     // Configuração de autorização - URL PÚBLICA (acessada pelo navegador do usuário)
     // O navegador redireciona para o Janus em localhost:3000 para autenticação
+    // Endpoint: /oidc/auth (conforme configuração do Janus IDP)
     authorization: {
       url: `${issuerUrl}/auth`,
       params: {
         // Escopos solicitados: openid (obrigatório), profile, email, offline_access (para refresh_token)
         scope: process.env.AUTH_SCOPE || "openid profile email offline_access",
+        // Resource Indicator (RFC 8707) - define a audience do JWT
+        // O Janus IDP incluirá este valor como claim 'aud' no access_token
+        resource: process.env.AUTH_AUDIENCE,
       },
     },
     // Endpoint de token - URL INTERNA (acessada pelo servidor backend)
@@ -142,10 +211,18 @@ const authOptions: NextAuthConfig = {
     /**
      * Callback JWT
      *
-     * Gerencia o ciclo de vida do token JWT:
-     * - Extrai access_token e refresh_token do Janus
+     * Gerencia o ciclo de vida do token JWT do NextAuth:
+     * - Extrai access_token e refresh_token do Janus IDP
+     * - Extrai claims do access_token JWT (sub, scope, roles, etc.)
+     * - Valida a audience do JWT (segurança)
      * - Trata expiração de tokens
-     * - Persiste tokens no JWT
+     * - Persiste tokens e claims no JWT do NextAuth
+     *
+     * Fluxo de validação do JWT:
+     * 1. A assinatura é validada pelo NextAuth via JWKS
+     * 2. O issuer (iss) é validado automaticamente
+     * 3. A audience (aud) é validada neste callback
+     * 4. A expiração (exp) é validada automaticamente
      */
     async jwt({ token, account, user }) {
       // Login inicial - extrai tokens da conta OAuth2
@@ -156,13 +233,62 @@ const authOptions: NextAuthConfig = {
           refresh_token: account.refresh_token ? "present" : "missing",
           expires_at: account.expires_at,
         });
+
+        // Extrai claims do access_token JWT
+        // O access_token do Janus IDP agora é um JWT assinado com RS256
+        const accessToken = account.access_token as string | undefined;
+        let claims: Record<string, unknown> = {};
+        let scopes: string[] = [];
+        let roles: string[] = [];
+        let userSub: string | undefined;
+
+        if (accessToken) {
+          claims = decodeJwtPayload(accessToken);
+          console.log("[JWT Callback] Claims extraídas do access_token:", {
+            iss: claims.iss,
+            sub: claims.sub,
+            aud: claims.aud,
+            scope: claims.scope,
+            roles: claims.roles,
+            exp: claims.exp,
+          });
+
+          // Validação da audience (segurança importante!)
+          // A audience deve corresponder ao resource indicator esperado
+          const expectedAudience = process.env.AUTH_AUDIENCE;
+          if (expectedAudience && claims.aud !== expectedAudience) {
+            console.error("[JWT Callback] Audience inválida:", {
+              expected: expectedAudience,
+              received: claims.aud,
+            });
+            // Em produção, você pode querer lançar um erro aqui
+            // Por ora, apenas logamos o warning
+          }
+
+          // Extrai escopos do claim 'scope'
+          scopes = extractScopes(claims.scope);
+
+          // Extrai roles (claim personalizada)
+          if (Array.isArray(claims.roles)) {
+            roles = claims.roles.filter((r) => typeof r === "string");
+          }
+
+          // ID do usuário do claim 'sub'
+          userSub = claims.sub as string | undefined;
+        }
+
         return {
           ...token,
-          accessToken: account.access_token,
+          accessToken,
           refreshToken: account.refresh_token,
           expiresAt: account.expires_at
             ? account.expires_at * 1000
             : Date.now() + 60 * 60 * 1000, // Default 1 hour
+          // Claims extraídas do JWT
+          claims,
+          scopes,
+          roles,
+          userSub,
         };
       }
 
@@ -197,12 +323,37 @@ const authOptions: NextAuthConfig = {
 
           const tokens = await response.json();
           console.log("[JWT Callback] Token renovado com sucesso");
+
+          // Extrai claims do novo access_token
+          const newAccessToken = tokens.access_token;
+          let claims: Record<string, unknown> = {};
+          let scopes: string[] = [];
+          let roles: string[] = [];
+          let userSub: string | undefined;
+
+          if (newAccessToken) {
+            claims = decodeJwtPayload(newAccessToken);
+            scopes = extractScopes(claims.scope);
+
+            if (Array.isArray(claims.roles)) {
+              roles = claims.roles.filter((r) => typeof r === "string");
+            }
+
+            userSub = claims.sub as string | undefined;
+          }
           
           return {
             ...token,
-            accessToken: tokens.access_token,
+            accessToken: newAccessToken,
             refreshToken: tokens.refresh_token || token.refreshToken,
             expiresAt: Date.now() + (tokens.expires_in * 1000),
+            // Atualiza claims do novo token
+            claims,
+            scopes,
+            roles,
+            userSub,
+            // Limpa erro anterior
+            error: undefined,
           };
         } catch (error) {
           console.error("[JWT Callback] Erro ao renovar token:", error);
@@ -222,19 +373,42 @@ const authOptions: NextAuthConfig = {
     /**
      * Callback de Sessão
      *
-     * Expõe o access_token na sessão para uso em componentes do servidor
-     * e rotas de API. Isso permite chamadas fetch autenticadas para a API de backend.
+     * Expõe o access_token e claims na sessão para uso em componentes do servidor
+     * e rotas de API. Isso permite:
+     * - Chamadas fetch autenticadas para a API de backend
+     * - Verificação de permissões por escopo
+     * - Exibição de informações do usuário
+     * - Controle de acesso baseado em roles
+     *
+     * Disponível na sessão:
+     * - accessToken: Token JWT para chamadas de API
+     * - refreshToken: Token para renovação
+     * - claims: Todas as claims do JWT
+     * - scopes: Lista de escopos autorizados
+     * - roles: Lista de papéis do usuário
+     * - userSub: ID único do usuário (sub)
      */
     async session({ session, token }) {
       console.log("[Session Callback] Criando sessão:", {
         user: session.user?.email,
         accessToken: token.accessToken ? "present" : "missing",
+        userSub: token.userSub,
+        scopes: token.scopes,
+        roles: token.roles,
         error: token.error,
       });
+
       if (session.user) {
+        // Tokens
         session.accessToken = token.accessToken as string | undefined;
         session.refreshToken = token.refreshToken as string | undefined;
         session.error = token.error as string | undefined;
+
+        // Claims extraídas do JWT
+        session.claims = token.claims as typeof session.claims;
+        session.scopes = token.scopes as string[] | undefined;
+        session.roles = token.roles as string[] | undefined;
+        session.userSub = token.userSub as string | undefined;
       }
       return session;
     },

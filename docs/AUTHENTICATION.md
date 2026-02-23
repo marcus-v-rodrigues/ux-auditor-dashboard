@@ -1,6 +1,6 @@
 # Autenticação OAuth2 com NextAuth.js e PKCE
 
-Este documento descreve a implementação de autenticação OAuth2 usando NextAuth.js com Janus IDP como provedor, seguindo o padrão BFF (Backend for Frontend).
+Este documento descreve a implementação de autenticação OAuth2 usando NextAuth.js com Janus IDP como provedor, seguindo o padr BFF (Backend for Frontend).
 
 ## Visão Geral
 
@@ -11,6 +11,157 @@ O sistema de autenticação implementa:
 - **Renovação Automática de Tokens**: Refresh automático usando refresh_token
 - **Proteção de Rotas**: Autenticação baseada em proxy
 - **Fetch Autenticado**: Chamadas de API do lado do servidor com injeção automática de token
+- **JWTs com Claims**: Access tokens são JWTs assinados com RS256 contendo claims personalizadas
+
+## JWTs no Janus IDP
+
+### Estrutura do Access Token
+
+Com a configuração atual do Janus IDP, os access_tokens são JWTs assinados com RS256. Isso permite:
+
+1. **Validação Local**: Não é necessário introspecção no IdP para cada requisição
+2. **Claims Disponíveis**: Informações do usuário e permissões diretamente no token
+3. **Performance**: Validação rápida sem chamadas de rede ao IdP
+
+### Claims Padrão do JWT
+
+| Claim | Descrição | Exemplo |
+|-------|-----------|---------|
+| `iss` | Issuer - URL do IdP | `http://localhost:3000/oidc` |
+| `sub` | Subject - ID único do usuário | `user-123` |
+| `aud` | Audience - Resource indicator | `http://localhost:3000/oidc/api` |
+| `iat` | Issued At - timestamp de criação | `1708644000` |
+| `exp` | Expiration - timestamp de expiração | `1708647600` |
+| `scope` | Escopos autorizados | `openid profile email` |
+| `jti` | JWT ID - identificador único | `uuid-do-token` |
+| `client_id` | ID do cliente OAuth | `ux-auditor` |
+
+### Claims Personalizadas (Opcionais)
+
+O Janus IDP pode ser configurado para incluir claims personalizadas:
+
+| Claim | Descrição | Exemplo |
+|-------|-----------|---------|
+| `roles` | Papéis do usuário | `['admin', 'user']` |
+| `email` | Email do usuário | `user@example.com` |
+
+### Validação do JWT
+
+```mermaid
+sequenceDiagram
+    participant Client as Cliente
+    participant API as UX Auditor API
+    participant IdP as Janus IdP
+    
+    Client->>API: Request com Bearer JWT
+    API->>API: 1. Decodifica header do JWT
+    API->>API: 2. Extrai kid e alg do header
+    API->>IdP: 3. GET /oidc/jwks
+    IdP->>API: 4. Retorna JWKS (chaves públicas)
+    API->>API: 5. Encontra chave pelo kid
+    API->>API: 6. Verifica assinatura RS256
+    API->>API: 7. Valida iss, aud, exp
+    API->>Client: Resposta autorizada
+```
+
+### Endpoint JWKS
+
+O endpoint `/.well-known/jwks.json` retorna as chaves públicas para verificação:
+
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "chave-1",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "modulo-da-chave-publica",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+### Claims Disponíveis na Sessão
+
+O Dashboard extrai automaticamente as claims do JWT e as disponibiliza na sessão:
+
+```typescript
+// Em componentes do servidor
+import { auth } from "@/app/api/auth/[...nextauth]/route";
+
+export default async function Page() {
+  const session = await auth();
+  
+  // Claims disponíveis:
+  // - session.accessToken: Token JWT completo
+  // - session.userSub: ID único do usuário (do claim 'sub')
+  // - session.scopes: Lista de escopos autorizados
+  // - session.roles: Lista de papéis do usuário (se disponível)
+  // - session.claims: Todas as claims do JWT
+  
+  return <div>Usuário: {session.userSub}</div>;
+}
+```
+
+### Verificação de Permissões por Escopo
+
+```typescript
+const session = await auth();
+
+// Verificar escopos
+if (session.scopes?.includes("admin")) {
+  // Usuário tem acesso admin
+}
+
+if (session.scopes?.includes("read:reports")) {
+  // Pode ler relatórios
+}
+```
+
+### Verificação de Roles
+
+```typescript
+const session = await auth();
+
+// Verificar roles (claim personalizada)
+if (session.roles?.includes("admin")) {
+  // Usuário é administrador
+}
+```
+
+### Diferenças: Opaque Token vs JWT
+
+| Aspecto | Opaque Token | JWT |
+|---------|--------------|-----|
+| Validação | Requer introspecção no IdP | Autocontido, validação local |
+| Tamanho | Curto (~40 chars) | Longo (~500-1000 chars) |
+| Informações | Nenhuma no token | Claims visíveis |
+| Revogação | Fácil (banco) | Difícil (precisa blocklist) |
+| Performance | Requer chamada ao IdP | Validação local rápida |
+
+### Considerações de Segurança
+
+```mermaid
+graph TD
+    A[JWT emitido] --> B{Validações}
+    B --> C[Verificar assinatura]
+    B --> D[Verificar expiração exp]
+    B --> E[Verificar issuer iss]
+    B --> F[Verificar audience aud]
+    C --> G[Token válido]
+    D --> G
+    E --> G
+    F --> G
+    G --> H[Autorizar requisição]
+```
+
+**Importante:** Os JWTs são assinados, não criptografados. Qualquer pessoa pode ler o conteúdo, mas apenas quem tem a chave privada (seu IdP) pode assinar. Por isso:
+- **Nunca** coloque informações sensíveis (senhas, dados bancários) no token
+- Sempre valide a assinatura antes de confiar nos claims
+- Use HTTPS para transmitir os tokens
+- Valide a audience (`aud`) para garantir que o token foi emitido para sua aplicação
 
 ## Fluxo PKCE (Proof Key for Code Exchange)
 
@@ -38,10 +189,13 @@ GET http://localhost:3000/oidc/auth?
   client_id=ux-auditor&
   redirect_uri=http://localhost:3001/api/auth/callback/janus&
   scope=openid profile email offline_access&
+  resource=http://localhost:3000/oidc/api&
   code_challenge=<hash gerado>&
   code_challenge_method=S256&
   state=<random string>
 ```
+
+**Nota:** O parâmetro `resource` é o Resource Indicator (RFC 8707) que define qual será a audience (`aud`) do JWT emitido.
 
 ### 4. Callback no Endpoint de Token
 ```
@@ -179,6 +333,8 @@ AUTH_JANUS_INTERNAL_URL=http://janus-service:3000/oidc
 AUTH_CLIENT_ID=ux-auditor
 AUTH_CLIENT_SECRET=janus_dashboard_secret
 AUTH_SCOPE=openid profile email offline_access
+# Audience esperada no JWT (resource indicator) - deve corresponder à configuração do Janus IDP
+AUTH_AUDIENCE=http://localhost:3000/oidc/api
 
 # Configuração da API
 UX_AUDITOR_API_URL=http://localhost:8000
@@ -192,6 +348,7 @@ UX_AUDITOR_API_URL=http://localhost:8000
 - `AUTH_CLIENT_ID`: Deve ser `ux-auditor` conforme especificado
 - `AUTH_CLIENT_SECRET`: Deve ser `janus_dashboard_secret` conforme especificado
 - `AUTH_SCOPE`: Deve incluir `offline_access` para obter refresh_token
+- `AUTH_AUDIENCE`: Audience esperada no JWT. Deve corresponder ao resource indicator configurado no Janus IDP. Usada para validação de segurança.
 - O callback URL deve ser registrado no Janus IDP: `http://localhost:3001/api/auth/callback/janus`
 
 ### Variáveis de Ambiente da API (FastAPI Backend)
