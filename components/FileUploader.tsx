@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { UploadCloud, FileJson, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
+import { UploadCloud, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
+import type { RrwebSessionEvent } from '@/types/dashboard';
 
 /**
  * Interface de props para o componente FileUploader
@@ -10,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
  * Recebe um array de eventos rrweb e o session_uuid retornado pela API.
  */
 interface Props {
-  onFileLoaded: (events: any[], sessionUuid: string) => void;
+  onFileLoaded: (events: RrwebSessionEvent[], sessionUuid: string) => void;
 }
 
 /**
@@ -179,13 +180,13 @@ export function FileUploader({ onFileLoaded }: Props) {
           const data: IngestResponse | ApiError = await response.json();
 
           if (!response.ok) {
-            // Trata diferentes tipos de erro
-            if (response.status === 401) {
-              showError('Sessão expirada. Por favor, faça login novamente.');
-            } else if (response.status === 502 || response.status === 503) {
+            const errorData = data as ApiError;
+
+            if (response.status === 502 || response.status === 503) {
               showError('A API está indisponível. Tente novamente mais tarde.');
+            } else if (response.status === 401 || response.status === 403) {
+              showError(errorData.error || 'Acesso negado. Verifique sua autenticação e permissões.');
             } else {
-              const errorData = data as ApiError;
               showError(errorData.error || `Erro ao enviar arquivo: ${response.status}`);
             }
             return;

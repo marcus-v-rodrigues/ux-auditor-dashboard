@@ -9,7 +9,7 @@ O sistema de autenticação implementa:
 - **Parâmetro State**: Proteção contra CSRF
 - **Gerenciamento de Tokens**: Tratamento de access_token e refresh_token
 - **Renovação Automática de Tokens**: Refresh automático usando refresh_token
-- **Proteção de Rotas**: Autenticação baseada em proxy
+- **Proteção de Rotas**: Autenticação e autorização centralizadas em proxy
 - **Fetch Autenticado**: Chamadas de API do lado do servidor com injeção automática de token
 - **JWTs com Claims**: Access tokens são JWTs assinados com RS256 contendo claims personalizadas
 
@@ -36,13 +36,23 @@ Com a configuração atual do Janus IDP, os access_tokens são JWTs assinados co
 | `jti` | JWT ID - identificador único | `uuid-do-token` |
 | `client_id` | ID do cliente OAuth | `ux-auditor` |
 
-### Claims Personalizadas (Opcionais)
+### Claims Personalizadas e RBAC
 
-O Janus IDP pode ser configurado para incluir claims personalizadas:
+O Janus IDP pode expor RBAC estruturado no token. O Dashboard normaliza isso para:
 
-| Claim | Descrição | Exemplo |
+```typescript
+type JanusRoles = {
+  global: string[];
+  client: { code: string; clientId: string }[];
+};
+```
+
+Semântica esperada:
+
+| Campo | Descrição | Exemplo |
 |-------|-----------|---------|
-| `roles` | Papéis do usuário | `['admin', 'user']` |
+| `roles.global` | Papéis globais da plataforma | `['janus_admin']` |
+| `roles.client` | Papéis por cliente | `[{ code: 'viewer', clientId: 'ux-auditor' }]` |
 | `email` | Email do usuário | `user@example.com` |
 
 ### Validação do JWT
@@ -89,19 +99,20 @@ O Dashboard extrai automaticamente as claims do JWT e as disponibiliza na sessã
 
 ```typescript
 // Em componentes do servidor
-import { auth } from "@/app/api/auth/[...nextauth]/route";
+import { auth } from "@/auth";
 
 export default async function Page() {
   const session = await auth();
   
   // Claims disponíveis:
   // - session.accessToken: Token JWT completo
-  // - session.userSub: ID único do usuário (do claim 'sub')
+  // - session.user: Objeto consistente com dados do usuário
+  // - session.user.sub: ID único do usuário (do claim 'sub')
   // - session.scopes: Lista de escopos autorizados
-  // - session.roles: Lista de papéis do usuário (se disponível)
+  // - session.roles: RBAC estruturado { global, client }
   // - session.claims: Todas as claims do JWT
-  
-  return <div>Usuário: {session.userSub}</div>;
+
+  return <div>Usuário: {session.user.sub}</div>;
 }
 ```
 
@@ -125,9 +136,14 @@ if (session.scopes?.includes("read:reports")) {
 ```typescript
 const session = await auth();
 
-// Verificar roles (claim personalizada)
-if (session.roles?.includes("admin")) {
-  // Usuário é administrador
+// Verificar role global
+if (session.roles?.global.includes("janus_admin")) {
+  // Usuário é administrador global
+}
+
+// Verificar acesso ao client do dashboard
+if (session.roles?.client.some((role) => role.clientId === "ux-auditor")) {
+  // Usuário pode usar o dashboard
 }
 ```
 
@@ -167,14 +183,14 @@ graph TD
 
 O PKCE é um protocolo de segurança que protege contra ataques de interceptação de código de autorização. O fluxo funciona da seguinte forma:
 
-### 1. GERAÇÃO DO CODE VERIFIER
+### 1. Geração de Code Verifier
 ```
 code_verifier = string_aleatória(43-128 caracteres)
 ```
 - Gerado automaticamente pelo NextAuth.js
 - String aleatória usando caracteres [A-Z, a-z, 0-9, -, ., _, ~]
 
-### 2. GERAÇÃO DO CODE CHALLENGE
+### 2. Geração do Code Challenge
 ```
 code_challenge = base64url(sha256(code_verifier))
 ```
@@ -182,7 +198,7 @@ code_challenge = base64url(sha256(code_verifier))
 - Codificado em base64url (sem padding)
 - Gerado automaticamente pelo NextAuth.js
 
-### 3. REDIRECIONAMENTO PARA AUTORIZAÇÃO
+### 3. Redirecionamento para Autorização
 ```
 GET http://localhost:3000/oidc/auth?
   response_type=code&
@@ -197,7 +213,7 @@ GET http://localhost:3000/oidc/auth?
 
 **Nota:** O parâmetro `resource` é o Resource Indicator (RFC 8707) que define qual será a audience (`aud`) do JWT emitido.
 
-### 4. CALLBACK NO ENDPOINT DE TOKEN
+### 4. Callback no Endpoint de Token
 ```
 POST http://localhost:3000/oidc/token
 Content-Type: application/x-www-form-urlencoded
@@ -210,7 +226,7 @@ client_secret=janus_dashboard_secret&
 code_verifier=<string gerada no passo 1>
 ```
 
-### 5. RESPOSTA COM TOKENS
+### 5. Resposta com Tokens
 ```json
 {
   "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -221,7 +237,7 @@ code_verifier=<string gerada no passo 1>
 }
 ```
 
-## ARQUITETURA
+## Arquitetura
 
 ```mermaid
 graph LR
@@ -251,9 +267,9 @@ graph LR
 ### 2. PROXY PARA PROTEÇÃO DE ROTAS
 **Arquivo:** [`../proxy.ts`](../proxy.ts:1)
 
-- Protege todas as rotas do dashboard
+- Protege rotas públicas, autenticadas e autorizadas em um único ponto
 - Redireciona usuários não autenticados para a página de login
-- Suporta URL de callback para redirecionamento após login
+- Redireciona usuários sem acesso ao `clientId = ux-auditor` para erro de acesso
 
 ### 3. HELPER DE FETCH AUTENTICADO
 **Arquivo:** [`../lib/authenticated-fetch.ts`](../lib/authenticated-fetch.ts:1)
@@ -266,8 +282,8 @@ graph LR
 ### 4. DEFINIÇÕES DE TIPOS TYPESCRIPT
 **Arquivo:** [`../types/next-auth.d.ts`](../types/next-auth.d.ts:1)
 
-- Interface Session estendida com `accessToken`, `refreshToken`, `error`
-- Suporte completo TypeScript para propriedades personalizadas
+- Interface `Session` com `user` consistente
+- Suporte completo TypeScript para `accessToken`, `expiresAt`, `claims`, `scopes` e `roles` estruturadas
 
 ### 5. PÁGINAS DE AUTENTICAÇÃO
 **Arquivos:** 
@@ -320,7 +336,7 @@ Crie um arquivo `.env.local` na raiz do projeto:
 # Configuração do NextAuth (v5 usa AUTH_URL e AUTH_SECRET)
 # URL pública para redirecionamentos do navegador
 AUTH_URL=http://localhost:3001
-# URL interna para comunicação entre containers Docker (usada por getSession)
+# URL interna para comunicação entre containers Docker
 # Em ambiente Docker, aponta para o nome do serviço no compose
 AUTH_INTERNAL_URL=http://ux_auditor_dashboard:3001
 AUTH_SECRET=seu-secret-key-aqui-gerado-com-openssl-rand-base64-32
@@ -342,7 +358,7 @@ UX_AUDITOR_API_URL=http://localhost:8000
 
 **Notas Importantes:**
 - `AUTH_URL`: URL pública usada para redirecionamentos do navegador. Deve ser `http://localhost:3001` para que o navegador consiga acessar.
-- `AUTH_INTERNAL_URL`: URL interna para comunicação entre containers Docker. Usada pela função `getSession()` em [`authenticated-fetch.ts`](../lib/authenticated-fetch.ts:39) para buscar a sessão internamente. Em ambiente Docker, deve apontar para o nome do container (`ux_auditor_dashboard:3001`).
+- `AUTH_INTERNAL_URL`: URL interna para comunicação entre containers Docker. Hoje o helper server-side usa `auth()` diretamente, então essa variável só é relevante se outro fluxo legado ainda depender dela.
 - `AUTH_ISSUER_URL`: URL pública do issuer OIDC do Janus IDP (acessada pelo navegador do usuário)
 - `AUTH_JANUS_INTERNAL_URL`: URL interna para comunicação servidor-servidor no Docker. **Obrigatória quando executando em containers Docker**. Deve usar o nome do serviço Docker (`janus-service`) para resolver corretamente na rede interna.
 - `AUTH_CLIENT_ID`: Deve ser `ux-auditor` conforme especificado
@@ -380,7 +396,7 @@ Devido ao conflito de DNS entre containers Docker e o navegador do usuário, os 
 |----------|-----|--------------|
 | Authorization | `http://localhost:3000/oidc/auth` | Navegador do usuário |
 | Token | `http://janus-service:3000/oidc/token` | Servidor backend |
-| UserInfo | `http://janus-service:3000/oidc/me` | Servidor backend |
+| UserInfo | `http://janus-service:3000/oidc/userinfo` | Servidor backend |
 | JWKS | `http://janus-service:3000/oidc/jwks` | Servidor backend |
 
 **Por que essa separação?**
@@ -512,11 +528,10 @@ export async function GET(request: NextRequest) {
 ### 4. ACESSAR DADOS DA SESSÃO
 
 ```tsx
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { auth } from "@/auth";
 
 export default async function ProfilePage() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   if (!session) {
     return <div>Não autenticado</div>;
@@ -525,7 +540,8 @@ export default async function ProfilePage() {
   return (
     <div>
       <p>Access Token: {session.accessToken?.slice(0, 20)}...</p>
-      <p>Usuário: {session.user?.email}</p>
+      <p>Usuário: {session.user.email}</p>
+      <p>Roles globais: {session.roles?.global.join(", ")}</p>
     </div>
   );
 }
@@ -644,6 +660,11 @@ O proxy protege todas as rotas exceto:
 - `/_next/*`: Arquivos internos do Next.js
 - Ativos estáticos
 
+Além disso, ele separa:
+- rotas públicas
+- rotas autenticadas
+- rotas que exigem acesso ao `clientId = ux-auditor`
+
 ## TRATAMENTO DE ERROS
 
 ### AUTHENTICATEDFETCHERROR
@@ -665,7 +686,11 @@ try {
 Usuários são redirecionados para `/auth/error` com códigos de erro:
 - `Configuration`: Problema na configuração do servidor
 - `AccessDenied`: Permissão negada
-- `Verification`: Token expirado
+- `AuthRequired`: Autenticação necessária
+- `SessionInvalid`: Sessão inválida
+- `TokenExpired`: Token expirado
+- `TokenRejected`: Token rejeitado pelo backend
+- `Forbidden`: Acesso negado pelo backend
 - `OAuthSignin`: Erro na construção da URL de autorização
 - `OAuthCallback`: Erro no tratamento da resposta do provedor OAuth
 
@@ -845,7 +870,7 @@ JWT_ALGORITHM=RS256
 ✅ **Parâmetro State** - Proteção contra CSRF
 ✅ **Gerenciamento de Tokens** - Tratamento de access_token e refresh_token
 ✅ **Renovação Automática de Tokens** - Refresh automático usando refresh_token
-✅ **Proteção de Rotas** - Autenticação baseada em proxy
+✅ **Proteção de Rotas** - Autenticação e autorização baseadas em proxy
 ✅ **Cookies de Sessão Criptografados** - Assinados com `AUTH_SECRET`
 ✅ **Chamadas de API com Tipagem** - Suporte completo TypeScript
 ✅ **Assinatura Assimétrica JWT** - RS256 com chaves do Janus IDP
@@ -854,8 +879,7 @@ JWT_ALGORITHM=RS256
 
 1. **Configurar o Janus IDP**: Configure sua instância do Janus IDP e registre a aplicação
 2. **Atualizar URIs de Redirecionamento**: Adicione `http://localhost:3001/api/auth/callback/janus` ao seu cliente do Janus IDP
-3. **Adicionar Controle de Acesso Baseado em Roles**: Estenda o proxy para controle de acesso baseado em roles
-4. **Testar Integração**: Verifique o fluxo de autenticação com sua API de backend
+3. **Testar Integração**: Verifique o fluxo de autenticação com sua API de backend
 
 ## MELHORES PRÁTICAS
 

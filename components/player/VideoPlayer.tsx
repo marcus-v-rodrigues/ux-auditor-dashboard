@@ -1,11 +1,30 @@
 // src/components/player/VideoPlayer.tsx
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useRef, useState } from 'react';
 import rrwebPlayer from 'rrweb-player';
 import 'rrweb-player/dist/style.css';
-import { InsightEvent } from '@/types/dashboard';
+import { InsightEvent, RrwebSessionEvent } from '@/types/dashboard';
 import { Play, Pause, FastForward, RotateCcw } from 'lucide-react';
+
+type RrwebPlayerState = 'playing' | 'paused' | 'ended' | string;
+
+type RrwebPlayerLike = {
+  play: () => void;
+  pause: () => void;
+  goto: (time: number) => void;
+  setSpeed: (speed: number) => void;
+  addEventListener: (
+    eventName: 'ui-update-player-state',
+    handler: (event: { payload?: RrwebPlayerState }) => void
+  ) => void;
+  replayer?: {
+    getCurrentTime: () => number;
+  };
+  getReplayer?: () => {
+    getCurrentTime: () => number;
+  };
+};
 
 /**
  * Interface de props para o componente VideoPlayer
@@ -15,7 +34,7 @@ import { Play, Pause, FastForward, RotateCcw } from 'lucide-react';
  * @property currentTime - Tempo atual da reprodução em milissegundos (controlado externamente)
  */
 interface Props {
-  events: any[];
+  events: RrwebSessionEvent[];
   onTimeUpdate: (time: number) => void;
   overlays: InsightEvent[];
   currentTime: number;
@@ -43,21 +62,25 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
   const wrapperRef = useRef<HTMLDivElement>(null);  // Wrapper responsável pelo layout e escala
   
   // Instância do Player rrweb
-  const [playerInstance, setPlayerInstance] = useState<any>(null);
+  const [playerInstance, setPlayerInstance] = useState<RrwebPlayerLike | null>(null);
   
   // Estados de Controle de Reprodução
   const [isPlaying, setIsPlaying] = useState(false); // Estado de play/pause
   const [speed, setSpeed] = useState(1);             // Velocidade de reprodução (0.5x, 1x, 2x, 4x)
-  const [duration, setDuration] = useState(0);       // Duração total da sessão em ms
 
   // Estados de Layout para "Fit Screen" (escala responsiva)
   const [playerState, setPlayerState] = useState({
-    width: 0,      // Largura original do vídeo
-    height: 0,     // Altura original do vídeo
-    scale: 1,      // Fator de escala aplicado
-    marginLeft: 0, // Margem esquerda para centralização
-    marginTop: 0   // Margem superior para centralização
-  });
+      width: 0,      // Largura original do vídeo
+      height: 0,     // Altura original do vídeo
+      scale: 1,      // Fator de escala aplicado
+      marginLeft: 0, // Margem esquerda para centralização
+      marginTop: 0   // Margem superior para centralização
+    });
+  const handleTimeUpdate = useEffectEvent(onTimeUpdate);
+  const duration = Math.max(
+    0,
+    (events[events.length - 1]?.timestamp || 0) - (events[0]?.timestamp || 0)
+  );
 
   /**
    * 1. INICIALIZAÇÃO E CONFIGURAÇÃO DO PLAYER
@@ -78,15 +101,9 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
 
     // Extração de metadados da sessão
     // Tipo 4 = Meta event (contém dimensões da tela)
-    const metaEvent = events.find((e: any) => e.type === 4);
+    const metaEvent = events.find((e) => e.type === 4);
     const videoW = metaEvent?.data?.width || 1024;  // Largura padrão se não encontrado
     const videoH = metaEvent?.data?.height || 576;   // Altura padrão se não encontrado
-
-    // Cálculo da duração total da sessão
-    const lastEvent = events[events.length - 1];
-    const firstEvent = events[0];
-    const totalTime = (lastEvent?.timestamp || 0) - (firstEvent?.timestamp || 0);
-    setDuration(totalTime);
 
     // Instanciação do player rrweb usando a API oficial
     const player = new rrwebPlayer({
@@ -102,7 +119,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
 
     // Listener de estado oficial da documentação rrweb
     // Atualiza o estado de play/pause quando o player muda internamente
-    player.addEventListener('ui-update-player-state', (event: any) => {
+    player.addEventListener('ui-update-player-state', (event) => {
         const state = event.payload; // 'playing', 'paused', ou 'ended'
         setIsPlaying(state === 'playing');
     });
@@ -193,7 +210,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
           
           // Notifica o componente pai sobre a mudança de tempo
           // Isso atualiza painéis de insights e telemetria
-          onTimeUpdate(time);
+          handleTimeUpdate(time);
 
           // Verifica se a reprodução chegou ao fim
           if (duration > 0 && time >= duration) {
@@ -208,7 +225,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [isPlaying, playerInstance, duration]); // Dependências limpas e otimizadas
+  }, [isPlaying, playerInstance, duration, handleTimeUpdate]); // Dependências limpas e otimizadas
 
   /**
    * 3. FUNÇÕES DE CONTROLE DE REPRODUÇÃO

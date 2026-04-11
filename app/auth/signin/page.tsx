@@ -36,7 +36,7 @@ export default async function SignInPage({
         </div>
 
         <div className="text-center text-sm text-slate-600 dark:text-slate-400">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link
             href="/auth/register"
             className="font-medium text-primary underline-offset-4 hover:underline"

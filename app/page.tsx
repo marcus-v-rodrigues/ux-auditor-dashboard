@@ -8,7 +8,7 @@ import { FileUploader } from '@/components/FileUploader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, FileJson, Sparkles, AlertCircle } from 'lucide-react';
-import { InsightEvent, TelemetryLog, SessionProcessResponse, PsychometricData, IntentAnalysis } from '@/types/dashboard';
+import { InsightEvent, TelemetryLog, SessionProcessResponse, PsychometricData, IntentAnalysis, RrwebSessionEvent } from '@/types/dashboard';
 
 /**
  * Página principal do Dashboard UX Auditor
@@ -23,7 +23,7 @@ export default function DashboardPage() {
   // Estado do tempo atual de reprodução em milissegundos
   const [currentTime, setCurrentTime] = useState(0);
   // Estado dos eventos rrweb carregados do arquivo
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<RrwebSessionEvent[]>([]);
   // Nome do arquivo/sessão exibido no header
   const [fileName, setFileName] = useState<string>("");
   // UUID da sessão retornado após upload bem-sucedido
@@ -54,7 +54,7 @@ export default function DashboardPage() {
    * @param uploadedEvents - Array de eventos rrweb do arquivo
    * @param uuid - Identificador único da sessão retornado pelo backend
    */
-  const handleFileLoaded = (uploadedEvents: any[], uuid: string) => {
+  const handleFileLoaded = (uploadedEvents: RrwebSessionEvent[], uuid: string) => {
     setEvents(uploadedEvents);
     setSessionUuid(uuid);
     setFileName(`Session: ${uuid.slice(0, 8)}...`);
@@ -179,6 +179,10 @@ export default function DashboardPage() {
 
   // Filtra overlays ativos baseados no tempo atual de reprodução
   // Considera um overlay como ativo se estiver dentro de uma janela de 1 segundo
+  const sessionDuration = Math.max(
+    0,
+    (events[events.length - 1]?.timestamp || 0) - (events[0]?.timestamp || 0)
+  );
   const activeOverlays = insights.filter(
     (i) => Math.abs(i.timestamp - currentTime) < 1000 && i.boundingBox
   );
@@ -290,7 +294,7 @@ export default function DashboardPage() {
                   {/* Barra de progresso da reprodução */}
                   <div 
                     className="absolute top-0 bottom-0 border-r border-primary bg-primary/5 transition-all duration-100 ease-linear"
-                    style={{ width: `${(currentTime / (events[events.length-1]?.timestamp - events[0]?.timestamp)) * 100}%` }} 
+                    style={{ width: sessionDuration > 0 ? `${(currentTime / sessionDuration) * 100}%` : "0%" }} 
                   />
                   {/* Marcadores de insights na timeline */}
                   {insights.map(i => (

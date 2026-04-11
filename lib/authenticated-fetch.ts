@@ -1,104 +1,133 @@
-import { cookies } from "next/headers";
+import "server-only";
+
+import { auth } from "@/auth";
 import type { Session } from "next-auth";
 
-/**
- * Opções de Fetch Autenticado
- * Estende o RequestInit padrão com configuração opcional
- */
+export type AuthenticatedFetchErrorCode =
+  | "UNAUTHENTICATED"
+  | "SESSION_INVALID"
+  | "TOKEN_EXPIRED"
+  | "TOKEN_REJECTED"
+  | "FORBIDDEN"
+  | "BACKEND_ERROR"
+  | "NETWORK_ERROR";
+
 export interface AuthenticatedFetchOptions extends RequestInit {
-  /**
-   * URL base para a API (padrão: variável de ambiente UX_AUDITOR_API_URL)
-   */
   baseUrl?: string;
-  /**
-   * Se deve lançar um erro em respostas não-2xx (padrão: true)
-   */
   throwOnError?: boolean;
 }
 
-/**
- * Erro de Fetch Autenticado
- * Classe de erro personalizada para erros de API com contexto adicional
- */
 export class AuthenticatedFetchError extends Error {
   constructor(
     message: string,
     public status: number,
-    public response?: Response
+    public code: AuthenticatedFetchErrorCode,
+    public response?: Response,
+    public details?: string
   ) {
     super(message);
     this.name = "AuthenticatedFetchError";
   }
 }
 
-/**
- * Obtém a sessão atual do NextAuth
- * 
- * @returns A sessão atual ou null se não estiver autenticado
- */
-async function getSession(): Promise<Session | null> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get("next-auth.session-token")?.value;
-  
-  if (!sessionToken) {
-    return null;
-  }
-  
-  // Busca sessão da API do NextAuth
-  // Nota: NextAuth v5 usa AUTH_URL (não NEXTAUTH_URL)
-  // Importante: Usa AUTH_INTERNAL_URL para comunicação entre containers Docker
-  // O AUTH_INTERNAL_URL deve apontar para o nome do serviço no compose (ex: ux_auditor_dashboard:3001)
-  // Isso é necessário porque AUTH_URL é usado pelo navegador para redirecionamentos
-  // e deve permanecer como localhost:3001
-  try {
-    const internalUrl = process.env.AUTH_INTERNAL_URL || "http://ux-auditor-dashboard:3001";
-    const response = await fetch(`${internalUrl}/api/auth/session`, {
-      headers: {
-        cookie: `next-auth.session-token=${sessionToken}`,
-      },
-    });
-    
-    if (!response.ok) {
-      return null;
-    }
-    
-    const session = await response.json();
-    return session as Session;
-  } catch {
-    return null;
-  }
+function getSessionToken(session: Session | null): string | undefined {
+  return session?.accessToken;
 }
 
-/**
- * Helper de Fetch Autenticado
- * 
- * Esta função helper faz requisições autenticadas para a API de backend
- * recuperando automaticamente a sessão e injetando o cabeçalho Authorization.
- * 
- * @param endpoint - O endpoint da API (ex: "/api/users", "/sessions/123")
- * @param options - Opções de fetch (method, body, headers, etc.)
- * 
- * @example
- * ```typescript
- * // Requisição GET
- * const data = await authenticatedFetch("/api/users");
- * 
- * // Requisição POST com corpo JSON
- * const result = await authenticatedFetch("/api/sessions", {
- *   method: "POST",
- *   body: JSON.stringify({ name: "Minha Sessão" }),
- * });
- * 
- * // URL base personalizada
- * const data = await authenticatedFetch("/external-api/data", {
- *   baseUrl: "https://api.example.com",
- * });
- * ```
- * 
- * @throws {AuthenticatedFetchError} Quando a requisição falha ou o usuário não está autenticado
- * @returns A resposta JSON analisada
- */
-export async function authenticatedFetch<T = any>(
+function isTokenExpired(session: Session | null): boolean {
+  if (!session?.expiresAt) {
+    return false;
+  }
+
+  return Date.now() >= session.expiresAt;
+}
+
+async function getAuthenticatedSession(): Promise<Session> {
+  const session = await auth();
+
+  if (!session) {
+    throw new AuthenticatedFetchError(
+      "Autenticação necessária",
+      401,
+      "UNAUTHENTICATED"
+    );
+  }
+
+  if (!session.user) {
+    throw new AuthenticatedFetchError(
+      "Sessão inválida",
+      401,
+      "SESSION_INVALID"
+    );
+  }
+
+  if (session.error === "RefreshAccessTokenError") {
+    throw new AuthenticatedFetchError(
+      "Token expirado",
+      401,
+      "TOKEN_EXPIRED"
+    );
+  }
+
+  const accessToken = getSessionToken(session);
+  if (!accessToken) {
+    throw new AuthenticatedFetchError(
+      "Sessão inválida",
+      401,
+      "SESSION_INVALID"
+    );
+  }
+
+  if (isTokenExpired(session)) {
+    throw new AuthenticatedFetchError(
+      "Token expirado",
+      401,
+      "TOKEN_EXPIRED"
+    );
+  }
+
+  return session;
+}
+
+function resolveApiErrorMessage(status: number, fallback: string): {
+  message: string;
+  code: AuthenticatedFetchErrorCode;
+} {
+  if (status === 401) {
+    return {
+      message: "Token rejeitado pelo backend",
+      code: "TOKEN_REJECTED",
+    };
+  }
+
+  if (status === 403) {
+    return {
+      message: "Acesso negado pelo backend",
+      code: "FORBIDDEN",
+    };
+  }
+
+  return {
+    message: fallback,
+    code: "BACKEND_ERROR",
+  };
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (response.status === 204) {
+    return undefined;
+  }
+
+  if (contentType.includes("application/json")) {
+    return response.json().catch(() => undefined);
+  }
+
+  return response.text().catch(() => undefined);
+}
+
+export async function authenticatedFetch<T = unknown>(
   endpoint: string,
   options: AuthenticatedFetchOptions = {}
 ): Promise<T> {
@@ -109,93 +138,83 @@ export async function authenticatedFetch<T = any>(
     ...restOptions
   } = options;
 
-  // Obtém a sessão atual
-  const session = await getSession();
+  const session = await getAuthenticatedSession();
+  const accessToken = getSessionToken(session);
 
-  // Verifica se o usuário está autenticado
-  if (!session || !session.accessToken) {
+  if (!accessToken) {
     throw new AuthenticatedFetchError(
-      "Usuário não autenticado ou access_token ausente",
-      401
+      "Sessão inválida",
+      401,
+      "SESSION_INVALID"
     );
   }
 
-  // Constrói a URL completa
   const url = `${baseUrl}${endpoint}`;
 
-  // Prepara os cabeçalhos com Authorization
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${session.accessToken}`,
-    ...customHeaders,
-  };
+  const headers = new Headers(customHeaders);
+  if (!headers.has("Content-Type") && restOptions.body) {
+    headers.set("Content-Type", "application/json");
+  }
+  headers.set("Authorization", `Bearer ${accessToken}`);
 
   try {
-    // Faz a requisição autenticada
     const response = await fetch(url, {
       ...restOptions,
       headers,
     });
 
-    // Trata respostas não-2xx
     if (!response.ok) {
-      let errorMessage = `Erro HTTP! status: ${response.status}`;
-      
-      try {
-        // Tenta analisar mensagem de erro do corpo da resposta
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorData.error || errorMessage;
-      } catch {
-        // Se a análise falhar, usa mensagem de erro padrão
-      }
+      const body = await readResponseBody(response);
+      const bodyMessage =
+        body && typeof body === "object" && "error" in body
+          ? String((body as { error?: unknown }).error ?? "")
+          : body && typeof body === "string"
+            ? body
+            : "";
+
+      const fallback =
+        bodyMessage || `Erro HTTP ao chamar ${endpoint}: ${response.status}`;
+      const mapped = resolveApiErrorMessage(response.status, fallback);
 
       if (throwOnError) {
-        throw new AuthenticatedFetchError(errorMessage, response.status, response);
+        throw new AuthenticatedFetchError(
+          mapped.message,
+          response.status,
+          mapped.code,
+          response,
+          bodyMessage || undefined
+        );
       }
+
+      return body as T;
     }
 
-    // Analisa e retorna a resposta
-    const data = await response.json();
-    return data as T;
+    return (await readResponseBody(response)) as T;
   } catch (error) {
-    // Relança AuthenticatedFetchError
     if (error instanceof AuthenticatedFetchError) {
       throw error;
     }
 
-    // Trata erros de rede
     throw new AuthenticatedFetchError(
-      `Erro de rede: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
-      0
+      `Erro de rede ao chamar ${endpoint}`,
+      0,
+      "NETWORK_ERROR",
+      undefined,
+      error instanceof Error ? error.message : "Erro desconhecido"
     );
   }
 }
 
-/**
- * Requisição GET Autenticada
- * 
- * @param endpoint - O endpoint da API
- * @param options - Opções adicionais de fetch
- * @returns A resposta JSON analisada
- */
-export async function authenticatedGet<T = any>(
+export async function authenticatedGet<T = unknown>(
   endpoint: string,
   options?: Omit<AuthenticatedFetchOptions, "method">
 ): Promise<T> {
   return authenticatedFetch<T>(endpoint, { ...options, method: "GET" });
 }
 
-/**
- * Requisição POST Autenticada
- * 
- * @param endpoint - O endpoint da API
- * @param body - O corpo da requisição (será convertido para JSON)
- * @param options - Opções adicionais de fetch
- * @returns A resposta JSON analisada
- */
-export async function authenticatedPost<T = any>(
+export async function authenticatedPost<T = unknown>(
   endpoint: string,
-  body: any,
+  body: unknown,
   options?: Omit<AuthenticatedFetchOptions, "method" | "body">
 ): Promise<T> {
   return authenticatedFetch<T>(endpoint, {
@@ -205,17 +224,9 @@ export async function authenticatedPost<T = any>(
   });
 }
 
-/**
- * Requisição PUT Autenticada
- * 
- * @param endpoint - O endpoint da API
- * @param body - O corpo da requisição (será convertido para JSON)
- * @param options - Opções adicionais de fetch
- * @returns A resposta JSON analisada
- */
-export async function authenticatedPut<T = any>(
+export async function authenticatedPut<T = unknown>(
   endpoint: string,
-  body: any,
+  body: unknown,
   options?: Omit<AuthenticatedFetchOptions, "method" | "body">
 ): Promise<T> {
   return authenticatedFetch<T>(endpoint, {
@@ -225,31 +236,16 @@ export async function authenticatedPut<T = any>(
   });
 }
 
-/**
- * Requisição DELETE Autenticada
- * 
- * @param endpoint - O endpoint da API
- * @param options - Opções adicionais de fetch
- * @returns A resposta JSON analisada
- */
-export async function authenticatedDelete<T = any>(
+export async function authenticatedDelete<T = unknown>(
   endpoint: string,
   options?: Omit<AuthenticatedFetchOptions, "method">
 ): Promise<T> {
   return authenticatedFetch<T>(endpoint, { ...options, method: "DELETE" });
 }
 
-/**
- * Requisição PATCH Autenticada
- * 
- * @param endpoint - O endpoint da API
- * @param body - O corpo da requisição (será convertido para JSON)
- * @param options - Opções adicionais de fetch
- * @returns A resposta JSON analisada
- */
-export async function authenticatedPatch<T = any>(
+export async function authenticatedPatch<T = unknown>(
   endpoint: string,
-  body: any,
+  body: unknown,
   options?: Omit<AuthenticatedFetchOptions, "method" | "body">
 ): Promise<T> {
   return authenticatedFetch<T>(endpoint, {

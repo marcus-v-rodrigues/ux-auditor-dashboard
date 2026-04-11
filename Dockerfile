@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # =============================================================================
 # Dockerfile - UX Auditor Dashboard
 # =============================================================================
@@ -53,12 +55,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Para aplicações Next.js que usam variáveis de ambiente em tempo de build,
 # elas devem ser definidas aqui. No entanto, para segurança, variáveis
 # sensíveis devem ser injetadas em tempo de execução via .env.local
-# 
+#
 # Se você precisar de variáveis em tempo de build, descomente e configure:
 # ENV NEXT_PUBLIC_API_URL=https://api.example.com
 
 # Executa o build da aplicação Next.js
-RUN npm run build
+RUN --mount=type=secret,id=env_local,dst=/run/secrets/env_local \
+    sh -c 'if [ -f /run/secrets/env_local ]; then set -a; . /run/secrets/env_local; set +a; fi; npm run build'
 
 # =============================================================================
 # ESTÁGIO 3: Runner de Produção

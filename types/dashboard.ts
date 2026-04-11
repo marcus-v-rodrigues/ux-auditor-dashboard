@@ -1,7 +1,10 @@
 // types/dashboard.ts
 
+import type { eventWithTime } from '@rrweb/types';
+
 export type InsightSeverity = 'low' | 'medium' | 'critical';
 export type InsightType = 'accessibility' | 'usability' | 'heuristic';
+export type RrwebSessionEvent = eventWithTime;
 
 export interface BoundingBox {
   top: number;

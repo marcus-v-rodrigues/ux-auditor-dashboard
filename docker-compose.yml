@@ -23,7 +23,10 @@ services:
     container_name: ux-auditor-dashboard
     
     # Build do diretório atual
-    build: .
+    build:
+      context: .
+      secrets:
+        - env_local
     
     # Mapeamento de portas (host:container)
     ports:
@@ -46,6 +49,10 @@ services:
     
     # Política de reinício
     restart: unless-stopped
+
+secrets:
+  env_local:
+    file: .env.local
 
 # =============================================================================
 # REDES
