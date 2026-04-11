@@ -9,13 +9,14 @@ import type {
 declare module "next-auth" {
   interface Session extends DefaultSession {
     user: JanusSessionUser;
+    roles: JanusRoles;
     accessToken?: string;
+    idToken?: string;
     refreshToken?: string;
     expiresAt?: number;
     error?: string;
     claims?: JanusClaims;
     scopes?: string[];
-    roles?: JanusRoles;
   }
 
   interface User extends DefaultUser {
@@ -28,12 +29,14 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     accessToken?: string;
+    idToken?: string;
     refreshToken?: string;
     expiresAt?: number;
     error?: string;
     claims?: JanusClaims;
     scopes?: string[];
     roles?: JanusRoles;
+    roleSource?: "profile" | "id_token" | "access_token" | "previous" | "empty";
     sub?: string;
     name?: string | null;
     email?: string | null;

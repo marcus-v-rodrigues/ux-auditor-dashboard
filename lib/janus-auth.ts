@@ -13,6 +13,30 @@ export type JanusRoles = {
   client: JanusClientRole[];
 };
 
+export type JanusProfile = Record<string, unknown> & {
+  sub?: string;
+  id?: string;
+  name?: string;
+  email?: string;
+  picture?: string;
+  roles?: unknown;
+  global_roles?: unknown;
+  globalRoles?: unknown;
+  client_roles?: unknown;
+  clientRoles?: unknown;
+  realm_access?: unknown;
+  resource_access?: unknown;
+};
+
+export type JanusRoleSource = "profile" | "id_token" | "access_token" | "previous" | "empty";
+
+export type JanusAccessDecision = {
+  allowed: boolean;
+  reason: "authenticated" | "missing_roles" | "missing_client_access";
+  hasClientAccess: boolean;
+  adminAccess: boolean;
+};
+
 export type JanusClaims = Record<string, unknown> & {
   iss?: string;
   sub?: string;
@@ -102,6 +126,13 @@ function normalizeClaims(input: unknown): JanusClaims {
   return isRecord(input) ? (input as JanusClaims) : {};
 }
 
+export function emptyJanusRoles(): JanusRoles {
+  return {
+    global: [],
+    client: [],
+  };
+}
+
 function normalizeClientRole(value: unknown): JanusClientRole | null {
   if (!isRecord(value)) {
     return null;
@@ -179,6 +210,76 @@ function collectGlobalRoles(rawRoles: unknown): string[] {
   }
 
   return collected;
+}
+
+export function normalizeJanusRoles(input: unknown): JanusRoles {
+  const roles = extractJanusRoles(normalizeClaims(input));
+  return hasJanusRoles(roles) ? roles : emptyJanusRoles();
+}
+
+export function hasJanusRoles(roles: JanusRoles | undefined | null): boolean {
+  return Boolean(roles && (roles.global.length > 0 || roles.client.length > 0));
+}
+
+function cloneJanusRoles(roles: JanusRoles): JanusRoles {
+  return {
+    global: [...roles.global],
+    client: roles.client.map((role) => ({ ...role })),
+  };
+}
+
+export function resolveJanusRolesFromSources(options: {
+  profileRoles?: unknown;
+  idToken?: string;
+  accessToken?: string;
+  previousRoles?: JanusRoles | null;
+}): { roles: JanusRoles; source: JanusRoleSource } {
+  const profileRoles = normalizeJanusRoles(options.profileRoles);
+  if (hasJanusRoles(profileRoles)) {
+    return { roles: profileRoles, source: "profile" };
+  }
+
+  const idTokenRoles = options.idToken
+    ? extractJanusRoles(decodeJwtPayload(options.idToken))
+    : emptyJanusRoles();
+  if (hasJanusRoles(idTokenRoles)) {
+    return { roles: idTokenRoles, source: "id_token" };
+  }
+
+  const accessTokenRoles = options.accessToken
+    ? extractJanusRoles(decodeJwtPayload(options.accessToken))
+    : emptyJanusRoles();
+  if (hasJanusRoles(accessTokenRoles)) {
+    return { roles: accessTokenRoles, source: "access_token" };
+  }
+
+  if (hasJanusRoles(options.previousRoles ?? undefined)) {
+    return {
+      roles: cloneJanusRoles(options.previousRoles as JanusRoles),
+      source: "previous",
+    };
+  }
+
+  return { roles: emptyJanusRoles(), source: "empty" };
+}
+
+export function normalizeJanusProfile(profile: unknown): JanusProfile {
+  const claims = normalizeClaims(profile);
+  const roles = normalizeJanusRoles(claims.roles ?? claims);
+  const sub =
+    toTrimmedString(claims.sub) ??
+    toTrimmedString(claims.id) ??
+    "";
+
+  return {
+    ...claims,
+    sub,
+    id: sub,
+    name: toTrimmedString(claims.name),
+    email: toTrimmedString(claims.email),
+    picture: toTrimmedString(claims.picture),
+    roles,
+  };
 }
 
 export function decodeJwtPayload(token: string): JanusClaims {
@@ -345,4 +446,36 @@ export function canUseUxAuditor(roles: JanusRoles | undefined): boolean {
 
 export function hasUxAuditorAppAccess(roles: JanusRoles | undefined): boolean {
   return canUseUxAuditor(roles) || isJanusAdmin(roles);
+}
+
+export function resolveUxAuditorAccess(
+  roles: JanusRoles | undefined
+): JanusAccessDecision {
+  const adminAccess = isJanusAdmin(roles);
+  const hasClientAccessValue = canUseUxAuditor(roles);
+
+  if (!roles || !hasJanusRoles(roles)) {
+    return {
+      allowed: adminAccess,
+      reason: "missing_roles",
+      hasClientAccess: hasClientAccessValue,
+      adminAccess,
+    };
+  }
+
+  if (adminAccess || hasClientAccessValue) {
+    return {
+      allowed: true,
+      reason: "authenticated",
+      hasClientAccess: hasClientAccessValue,
+      adminAccess,
+    };
+  }
+
+  return {
+    allowed: false,
+    reason: "missing_client_access",
+    hasClientAccess: hasClientAccessValue,
+    adminAccess,
+  };
 }

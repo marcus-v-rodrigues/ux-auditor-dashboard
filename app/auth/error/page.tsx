@@ -8,6 +8,8 @@ import { AlertCircle } from "lucide-react";
 const ERROR_MESSAGES: Record<string, string> = {
   Configuration: "Erro de configuração do servidor.",
   AccessDenied: "Você não tem acesso ao client ux-auditor.",
+  AccessDeniedClient: "Você não tem acesso ao client ux-auditor.",
+  AccessDeniedNoRoles: "Sua sessão autenticou, mas não trouxe roles válidas do Janus.",
   AuthRequired: "Autenticação necessária.",
   SessionInvalid: "Sessão inválida.",
   TokenExpired: "Token expirado. Faça login novamente.",

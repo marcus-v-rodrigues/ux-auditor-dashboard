@@ -5,6 +5,8 @@ import {
   decodeJwtPayload,
   extractJanusRoles,
   extractScopes,
+  normalizeJanusProfile,
+  resolveJanusRolesFromSources,
   type JanusClaims,
 } from "@/lib/janus-auth";
 
@@ -42,15 +44,34 @@ function isValidAudience(aud: JanusClaims["aud"], expected: string): boolean {
   return aud === expected;
 }
 
-function mergeTokenClaims(token: JWT, accessToken?: string): JWT {
-  const claims = accessToken ? decodeJwtPayload(accessToken) : {};
-  const roles = extractJanusRoles(claims);
+function mergeTokenClaims(
+  token: JWT,
+  options: {
+    accessToken?: string;
+    idToken?: string;
+    profileRoles?: unknown;
+  } = {}
+): JWT {
+  const accessClaims = options.accessToken ? decodeJwtPayload(options.accessToken) : {};
+  const idTokenClaims = options.idToken ? decodeJwtPayload(options.idToken) : {};
+  const claims: JanusClaims = {
+    ...(token.claims ?? {}),
+    ...accessClaims,
+    ...idTokenClaims,
+  };
+  const { roles, source } = resolveJanusRolesFromSources({
+    profileRoles: options.profileRoles,
+    idToken: options.idToken,
+    accessToken: options.accessToken,
+    previousRoles: token.roles,
+  });
   const scopes = extractScopes(claims.scope);
   const resolvedSub = claims.sub ?? token.sub;
 
   return {
     ...token,
-    accessToken: accessToken ?? token.accessToken,
+    accessToken: options.accessToken ?? token.accessToken,
+    idToken: options.idToken ?? token.idToken,
     claims,
     roles,
     scopes,
@@ -63,6 +84,7 @@ function mergeTokenClaims(token: JWT, accessToken?: string): JWT {
     ),
     email: token.email ?? claims.email ?? null,
     picture: token.picture ?? claims.picture ?? null,
+    roleSource: source,
   };
 }
 
@@ -104,7 +126,9 @@ async function refreshJanusToken(token: JWT): Promise<JWT> {
     expires_in?: number;
   };
 
-  const refreshedToken = mergeTokenClaims(token, tokens.access_token);
+  const refreshedToken = mergeTokenClaims(token, {
+    accessToken: tokens.access_token,
+  });
 
   return {
     ...refreshedToken,
@@ -128,7 +152,7 @@ function JanusProvider(clientId: string, clientSecret: string): NextAuthConfig["
   return {
     id: "janus",
     name: "Janus IDP",
-    type: "oauth",
+    type: "oidc",
     issuer: issuerUrl,
     clientId,
     clientSecret,
@@ -150,17 +174,16 @@ function JanusProvider(clientId: string, clientSecret: string): NextAuthConfig["
       name?: string;
       email?: string;
       picture?: string;
+      roles?: unknown;
     }) {
+      const normalizedProfile = normalizeJanusProfile(profile);
       return {
-        id: profile.sub || profile.id || "",
-        sub: profile.sub || profile.id || "",
-        name: profile.name,
-        email: profile.email,
-        image: profile.picture || null,
-        roles: {
-          global: [],
-          client: [],
-        },
+        id: normalizedProfile.sub || normalizedProfile.id || "",
+        sub: normalizedProfile.sub || normalizedProfile.id || "",
+        name: normalizedProfile.name,
+        email: normalizedProfile.email,
+        image: normalizedProfile.picture || null,
+        roles: normalizedProfile.roles,
       };
     },
   } as NextAuthConfig["providers"][number];
@@ -179,10 +202,15 @@ const authOptions: NextAuthConfig = {
     async jwt({ token, account, user }) {
       if (account && user) {
         const accessToken = account.access_token as string | undefined;
-        const claims = accessToken ? decodeJwtPayload(accessToken) : {};
-        const roles = extractJanusRoles(claims);
-        const scopes = extractScopes(claims.scope);
+        const idToken = account.id_token as string | undefined;
+        const accessClaims = accessToken ? decodeJwtPayload(accessToken) : {};
+        const idTokenClaims = idToken ? decodeJwtPayload(idToken) : {};
+        const claims: JanusClaims = {
+          ...accessClaims,
+          ...idTokenClaims,
+        };
         const expectedAudience = process.env.AUTH_AUDIENCE;
+        const profileRoles = (user as { roles?: unknown }).roles;
 
         if (expectedAudience && !isValidAudience(claims.aud, expectedAudience)) {
           console.warn("[JWT Callback] Audience inválida", {
@@ -203,17 +231,27 @@ const authOptions: NextAuthConfig = {
             email: user.email ?? token.email ?? claims.email ?? null,
             picture: (user as { image?: string | null }).image ?? token.picture ?? claims.picture ?? null,
             accessToken,
+            idToken,
             refreshToken: account.refresh_token,
             expiresAt: parseExpiresAt(account.expires_at) ?? Date.now() + 60 * 60 * 1000,
           } as JWT,
-          accessToken
+          {
+            accessToken,
+            idToken,
+            profileRoles,
+          }
         );
+
+        console.log("[JWT Callback]", {
+          user: normalizedToken.email ?? normalizedToken.sub,
+          roleSource: normalizedToken.roleSource,
+          globalRoles: normalizedToken.roles?.global ?? [],
+          clientRoles: normalizedToken.roles?.client ?? [],
+        });
 
         return {
           ...normalizedToken,
           claims,
-          roles: roles.global.length || roles.client.length ? roles : normalizedToken.roles,
-          scopes,
           error: undefined,
         };
       }
@@ -252,6 +290,15 @@ const authOptions: NextAuthConfig = {
         claims,
         roles,
       } as JWT);
+
+      const sameContent =
+      JSON.stringify(user.roles) === JSON.stringify(roles);
+
+      console.log("[Session RBAC]", {
+        sameContent,
+        sessionRoles: roles,
+        userRoles: user.roles,
+      });
 
       return {
         ...session,

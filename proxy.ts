@@ -1,8 +1,7 @@
 import { auth } from "@/auth";
 import {
-  hasUxAuditorAppAccess,
-  isJanusAdmin,
-  canUseUxAuditor,
+  hasJanusRoles,
+  resolveUxAuditorAccess,
 } from "@/lib/janus-auth";
 import type { Session } from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
@@ -32,14 +31,24 @@ function redirectToSignIn(req: NextRequest): Response {
   return Response.redirect(signInUrl);
 }
 
-function redirectToAccessDenied(req: NextRequest): Response {
-  const errorUrl = new URL("/auth/error", req.url);
-  errorUrl.searchParams.set("error", "AccessDenied");
-  return Response.redirect(errorUrl);
+function unauthorizedJson(
+  message: string,
+  status: number,
+  code?: string
+): Response {
+  return NextResponse.json({ error: message, code }, { status });
 }
 
-function unauthorizedJson(message: string, status: number): Response {
-  return NextResponse.json({ error: message }, { status });
+function redirectToDeniedReason(
+  req: NextRequest,
+  reason: "missing_roles" | "missing_client_access"
+): Response {
+  const errorUrl = new URL("/auth/error", req.url);
+  errorUrl.searchParams.set(
+    "error",
+    reason === "missing_roles" ? "AccessDeniedNoRoles" : "AccessDeniedClient"
+  );
+  return Response.redirect(errorUrl);
 }
 
 export default auth((req: NextRequest & { auth: Session | null }) => {
@@ -63,26 +72,44 @@ export default auth((req: NextRequest & { auth: Session | null }) => {
 
   if (!req.auth) {
     return isApiPath(pathname)
-      ? unauthorizedJson("Autenticação necessária", 401)
+      ? unauthorizedJson("Autenticação necessária", 401, "AUTH_REQUIRED")
       : redirectToSignIn(req);
   }
 
-  const roles = req.auth.user?.roles;
-  const hasAppAccess = hasUxAuditorAppAccess(roles);
-  const hasClientAccess = canUseUxAuditor(roles);
-  const adminAccess = isJanusAdmin(roles);
+  const roles = req.auth.roles ?? req.auth.user?.roles;
+  const access = resolveUxAuditorAccess(roles);
+  const authenticated = Boolean(req.auth);
+  const hasRoles = hasJanusRoles(roles);
 
-  if (!hasAppAccess) {
+  console.log("[Proxy RBAC]", {
+    pathname,
+    authenticated,
+    hasRoles,
+    globalRoles: roles?.global ?? [],
+    clientRoles: roles?.client ?? [],
+    hasClientAccess: access.hasClientAccess,
+    adminAccess: access.adminAccess,
+    allowed: access.allowed,
+    reason: access.reason,
+  });
+
+  if (!access.allowed) {
+    const denyReason =
+      access.reason === "missing_roles"
+        ? "missing_roles"
+        : "missing_client_access";
+
     return isApiPath(pathname)
       ? unauthorizedJson(
-          "Acesso negado ao client ux-auditor",
-          403
+          access.reason === "missing_roles"
+            ? "Sessão autenticada sem roles válidas"
+            : "Acesso negado ao client ux-auditor",
+          403,
+          access.reason === "missing_roles"
+            ? "AUTHENTICATED_WITHOUT_ROLES"
+            : "CLIENT_ACCESS_DENIED"
         )
-      : redirectToAccessDenied(req);
-  }
-
-  if (!pathname.startsWith("/api/") && !hasClientAccess && !adminAccess) {
-    return redirectToAccessDenied(req);
+      : redirectToDeniedReason(req, denyReason);
   }
 
   return;
