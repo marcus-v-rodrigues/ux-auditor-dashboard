@@ -167,14 +167,14 @@ graph TD
 
 O PKCE é um protocolo de segurança que protege contra ataques de interceptação de código de autorização. O fluxo funciona da seguinte forma:
 
-### 1. Geração do Code Verifier
+### 1. GERAÇÃO DO CODE VERIFIER
 ```
 code_verifier = string_aleatória(43-128 caracteres)
 ```
 - Gerado automaticamente pelo NextAuth.js
 - String aleatória usando caracteres [A-Z, a-z, 0-9, -, ., _, ~]
 
-### 2. Geração do Code Challenge
+### 2. GERAÇÃO DO CODE CHALLENGE
 ```
 code_challenge = base64url(sha256(code_verifier))
 ```
@@ -182,7 +182,7 @@ code_challenge = base64url(sha256(code_verifier))
 - Codificado em base64url (sem padding)
 - Gerado automaticamente pelo NextAuth.js
 
-### 3. Redirecionamento para Autorização
+### 3. REDIRECIONAMENTO PARA AUTORIZAÇÃO
 ```
 GET http://localhost:3000/oidc/auth?
   response_type=code&
@@ -197,7 +197,7 @@ GET http://localhost:3000/oidc/auth?
 
 **Nota:** O parâmetro `resource` é o Resource Indicator (RFC 8707) que define qual será a audience (`aud`) do JWT emitido.
 
-### 4. Callback no Endpoint de Token
+### 4. CALLBACK NO ENDPOINT DE TOKEN
 ```
 POST http://localhost:3000/oidc/token
 Content-Type: application/x-www-form-urlencoded
@@ -210,7 +210,7 @@ client_secret=janus_dashboard_secret&
 code_verifier=<string gerada no passo 1>
 ```
 
-### 5. Resposta com Tokens
+### 5. RESPOSTA COM TOKENS
 ```json
 {
   "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -221,7 +221,7 @@ code_verifier=<string gerada no passo 1>
 }
 ```
 
-## Arquitetura
+## ARQUITETURA
 
 ```mermaid
 graph LR
@@ -235,9 +235,9 @@ graph LR
     style D fill:#e1ffe1
 ```
 
-## O Que Foi Implementado
+## O QUE FOI IMPLEMENTADO
 
-### 1. Configuração do NextAuth.js com PKCE
+### 1. CONFIGURAÇÃO DO NEXTAUTH.JS COM PKCE
 **Arquivo:** [`../app/api/auth/[...nextauth]/route.ts`](../app/api/auth/[...nextauth]/route.ts:1)
 
 - Provedor OAuth2 personalizado para Janus IDP
@@ -248,14 +248,14 @@ graph LR
 - Callback de sessão para expor o access_token aos componentes do servidor
 - **Renovação automática de tokens usando refresh_token**
 
-### 2. Proxy para Proteção de Rotas
+### 2. PROXY PARA PROTEÇÃO DE ROTAS
 **Arquivo:** [`../proxy.ts`](../proxy.ts:1)
 
 - Protege todas as rotas do dashboard
 - Redireciona usuários não autenticados para a página de login
 - Suporta URL de callback para redirecionamento após login
 
-### 3. Helper de Fetch Autenticado
+### 3. HELPER DE FETCH AUTENTICADO
 **Arquivo:** [`../lib/authenticated-fetch.ts`](../lib/authenticated-fetch.ts:1)
 
 - Fetch do lado do servidor com injeção automática de token
@@ -263,24 +263,24 @@ graph LR
 - Tratamento de erros personalizado com [`AuthenticatedFetchError`](../lib/authenticated-fetch.ts:19)
 - Chamadas de API com tipagem TypeScript
 
-### 4. Definições de Tipos TypeScript
+### 4. DEFINIÇÕES DE TIPOS TYPESCRIPT
 **Arquivo:** [`../types/next-auth.d.ts`](../types/next-auth.d.ts:1)
 
 - Interface Session estendida com `accessToken`, `refreshToken`, `error`
 - Suporte completo TypeScript para propriedades personalizadas
 
-### 5. Páginas de Autenticação
+### 5. PÁGINAS DE AUTENTICAÇÃO
 **Arquivos:** 
 - [`../app/auth/signin/page.tsx`](../app/auth/signin/page.tsx:1) - Página de login
 - [`../app/auth/error/page.tsx`](../app/auth/error/page.tsx:1) - Página de erro com códigos de erro
 
-### 6. Configuração de Ambiente
+### 6. CONFIGURAÇÃO DE AMBIENTE
 **Arquivo:** [`../.env.local.example`](../.env.local.example:1)
 
 - Template para todas as variáveis de ambiente necessárias
 - Inclui configuração do NextAuth, Janus IDP e API
 
-## Estrutura de Arquivos
+## ESTRUTURA DE ARQUIVOS
 
 ```mermaid
 graph TD
@@ -310,9 +310,9 @@ graph TD
     style G fill:#fff9c4
 ```
 
-## Configuração
+## CONFIGURAÇÃO
 
-### Variáveis de Ambiente do Dashboard (Next.js)
+### VARIÁVEIS DE AMBIENTE DO DASHBOARD (NEXT.JS)
 
 Crie um arquivo `.env.local` na raiz do projeto:
 
@@ -351,7 +351,7 @@ UX_AUDITOR_API_URL=http://localhost:8000
 - `AUTH_AUDIENCE`: Audience esperada no JWT. Deve corresponder ao resource indicator configurado no Janus IDP. Usada para validação de segurança.
 - O callback URL deve ser registrado no Janus IDP: `http://localhost:3001/api/auth/callback/janus`
 
-### Variáveis de Ambiente da API (FastAPI Backend)
+### VARIÁVEIS DE AMBIENTE DA API (FASTAPI BACKEND)
 
 A API FastAPI precisa validar os tokens JWT emitidos pelo Janus IDP. Configure as seguintes variáveis:
 
@@ -372,7 +372,7 @@ JWT_ALGORITHM=RS256
 - `AUTH_ISSUER_URL`: Deve ser `http://localhost:3000/oidc` (URL pública) porque o Janus IDP usa essa URL como `iss` nos tokens. A API valida isso contra o valor no token.
 - `JWT_ALGORITHM`: Deve ser `RS256` para suportar a assinatura assimétrica do Janus IDP
 
-### Separação de URLs (Frontend vs Backend)
+### SEPARAÇÃO DE URLS (FRONTEND VS BACKEND)
 
 Devido ao conflito de DNS entre containers Docker e o navegador do usuário, os endpoints são separados:
 
@@ -388,21 +388,21 @@ Devido ao conflito de DNS entre containers Docker e o navegador do usuário, os 
 - O servidor backend não consegue acessar `localhost` do host quando está em um container
 - A solução usa URLs públicas para o navegador e URLs internas para o backend
 
-### Gerar AUTH_SECRET
+### GERAR AUTH_SECRET
 
 ```bash
 openssl rand -base64 32
 ```
 
-## Início Rápido
+## INÍCIO RÁPIDO
 
-### 1. Instalar Dependências
+### 1. INSTALAR DEPENDÊNCIAS
 
 ```bash
 npm install next-auth@beta
 ```
 
-### 2. Configurar Variáveis de Ambiente
+### 2. CONFIGURAR VARIÁVEIS DE AMBIENTE
 
 Copie o arquivo de exemplo e configure seus valores:
 
@@ -443,13 +443,13 @@ openssl rand -base64 32
 - O escopo `offline_access` é necessário para obter `refresh_token`
 - O callback URL deve ser registrado no Janus IDP: `http://localhost:3001/api/auth/callback/janus`
 
-### 3. Iniciar o Servidor de Desenvolvimento
+### 3. INICIAR O SERVIDOR DE DESENVOLVIMENTO
 
 ```bash
 npm run dev
 ```
 
-### 4. Testar a Autenticação
+### 4. TESTAR A AUTENTICAÇÃO
 
 1. Acesse `http://localhost:3000`
 2. Você será redirecionado para `/auth/signin`
@@ -457,9 +457,9 @@ npm run dev
 4. Complete o fluxo OAuth2
 5. Você será redirecionado de volta para o dashboard
 
-## Uso
+## USO
 
-### 1. Fazer Login
+### 1. FAZER LOGIN
 
 Usuários são redirecionados automaticamente para a página de login ao acessar rotas protegidas:
 
@@ -469,7 +469,7 @@ Usuários são redirecionados automaticamente para a página de login ao acessar
 // O usuário será redirecionado para /auth/signin
 ```
 
-### 2. Fazer Chamadas de API Autenticadas (Server Components)
+### 2. FAZER CHAMADAS DE API AUTENTICADAS (SERVER COMPONENTS)
 
 Use o helper [`authenticatedFetch`](../lib/authenticated-fetch.ts:1):
 
@@ -490,7 +490,7 @@ export default async function DashboardPage() {
 }
 ```
 
-### 3. Fazer Chamadas de API Autenticadas (API Routes)
+### 3. FAZER CHAMADAS DE API AUTENTICADAS (API ROUTES)
 
 ```tsx
 import { NextRequest, NextResponse } from "next/server";
@@ -509,7 +509,7 @@ export async function GET(request: NextRequest) {
 }
 ```
 
-### 4. Acessar Dados da Sessão
+### 4. ACESSAR DADOS DA SESSÃO
 
 ```tsx
 import { getServerSession } from "next-auth";
@@ -531,7 +531,7 @@ export default async function ProfilePage() {
 }
 ```
 
-### 5. Tratamento de Erros
+### 5. TRATAMENTO DE ERROS
 
 ```tsx
 import { authenticatedGet, AuthenticatedFetchError } from "@/lib/authenticated-fetch";
@@ -549,9 +549,9 @@ export default async function DataPage() {
 }
 ```
 
-## Referência da API
+## REFERÊNCIA DA API
 
-### authenticatedFetch
+### AUTHENTICATEDFETCH
 
 Função principal para fazer requisições autenticadas.
 
@@ -573,7 +573,7 @@ async function authenticatedFetch<T>(
 - `body`: Corpo da requisição (automaticamente convertido para JSON)
 - `headers`: Cabeçalhos personalizados
 
-### Funções Helper
+### FUNÇÕES HELPER
 
 - [`authenticatedGet`](../lib/authenticated-fetch.ts:179): Requisições GET
 - [`authenticatedPost`](../lib/authenticated-fetch.ts:193): Requisições POST
@@ -581,9 +581,9 @@ async function authenticatedFetch<T>(
 - [`authenticatedDelete`](../lib/authenticated-fetch.ts:223): Requisições DELETE
 - [`authenticatedPatch`](../lib/authenticated-fetch.ts:238): Requisições PATCH
 
-## Recursos de Segurança
+## RECURSOS DE SEGURANÇA
 
-### PKCE (Proof Key for Code Exchange)
+### PKCE (PROOF KEY FOR CODE EXCHANGE)
 
 PKCE é ativado automaticamente pelo NextAuth.js para prevenir ataques de interceptação de código de autorização. O fluxo PKCE:
 
@@ -594,17 +594,17 @@ PKCE é ativado automaticamente pelo NextAuth.js para prevenir ataques de interc
 
 O NextAuth.js v5 implementa PKCE automaticamente quando a opção `checks: ["pkce", "state"]` está configurada no provedor OAuth.
 
-### Parâmetro State
+### PARÂMETRO STATE
 
 O parâmetro state é usado para prevenir ataques CSRF durante o fluxo OAuth2. O NextAuth.js gera automaticamente um state aleatório e o valida no callback.
 
-### Armazenamento de Tokens
+### ARMAZENAMENTO DE TOKENS
 
 - **Access Token**: Armazenado na sessão JWT, acessível em componentes do servidor
 - **Refresh Token**: Armazenado na sessão JWT para renovação de token
 - **Cookie de Sessão**: Criptografado e assinado usando `AUTH_SECRET`
 
-### Renovação de Tokens
+### RENOVAÇÃO DE TOKENS
 
 O sistema implementa renovação automática de tokens usando o refresh_token:
 
@@ -636,7 +636,7 @@ graph TD
 
 **Importante**: O escopo `offline_access` deve ser incluído em `AUTH_SCOPE` para obter o refresh_token.
 
-### Proteção de Rotas
+### PROTEÇÃO DE ROTAS
 
 O proxy protege todas as rotas exceto:
 - `/api/auth/*`: Endpoints do NextAuth
@@ -644,9 +644,9 @@ O proxy protege todas as rotas exceto:
 - `/_next/*`: Arquivos internos do Next.js
 - Ativos estáticos
 
-## Tratamento de Erros
+## TRATAMENTO DE ERROS
 
-### AuthenticatedFetchError
+### AUTHENTICATEDFETCHERROR
 
 Classe de erro personalizada para erros de API:
 
@@ -660,7 +660,7 @@ try {
 }
 ```
 
-### Erros de Autenticação
+### ERROS DE AUTENTICAÇÃO
 
 Usuários são redirecionados para `/auth/error` com códigos de erro:
 - `Configuration`: Problema na configuração do servidor
@@ -669,7 +669,7 @@ Usuários são redirecionados para `/auth/error` com códigos de erro:
 - `OAuthSignin`: Erro na construção da URL de autorização
 - `OAuthCallback`: Erro no tratamento da resposta do provedor OAuth
 
-## Refresh de Token
+## REFRESH DE TOKEN
 
 O sistema implementa renovação automática de tokens no callback JWT. Quando o access_token expira, o sistema:
 
@@ -725,9 +725,9 @@ if (token.refreshToken) {
 
 **Importante**: Para que o refresh funcione, o escopo `offline_access` deve estar incluído em `AUTH_SCOPE`.
 
-## Testes
+## TESTES
 
-### Desenvolvimento Local
+### DESENVOLVIMENTO LOCAL
 
 1. Configure sua instância do Janus IDP
 2. Configure as variáveis de ambiente
@@ -739,7 +739,7 @@ npm run dev
 
 4. Acesse `http://localhost:3000` - você será redirecionado para fazer login
 
-### Testar Fetch Autenticado
+### TESTAR FETCH AUTENTICADO
 
 Crie um componente de servidor de teste:
 
@@ -757,16 +757,16 @@ export default async function TestAuthPage() {
 }
 ```
 
-## Solução de Problemas
+## SOLUÇÃO DE PROBLEMAS
 
-### "Usuário não autenticado"
+### "USUÁRIO NÃO AUTENTICADO"
 
 Verifique:
 1. Usuário está logado
 2. Cookie de sessão está presente
 3. `AUTH_SECRET` está configurado corretamente
 
-### "Credenciais de cliente inválidas"
+### "CREDENCIAIS DE CLIENTE INVÁLIDAS"
 
 Verifique:
 1. `AUTH_CLIENT_ID` está configurado como `ux-auditor`
@@ -774,7 +774,7 @@ Verifique:
 3. Cliente está registrado no Janus IDP
 4. URI de redirecionamento corresponde (ex: `http://localhost:3001/api/auth/callback/janus`)
 
-### "Token expirado"
+### "TOKEN EXPIRADO"
 
 O sistema implementa renovação automática de tokens. Se ainda assim ocorrer erro:
 
@@ -783,21 +783,21 @@ O sistema implementa renovação automática de tokens. Se ainda assim ocorrer e
 3. Verifique se o endpoint de token está acessível
 4. Verifique os logs do console para erros de renovação
 
-### "PKCE validation failed"
+### "PKCE VALIDATION FAILED"
 
 Verifique:
 1. O provedor OAuth está configurado com `checks: ["pkce", "state"]`
 2. O Janus IDP suporta PKCE
 3. Não há proxies ou firewalls modificando os parâmetros da requisição
 
-### Middleware não protegendo rotas
+### MIDDLEWARE NÃO PROTEGENDO ROTAS
 
 Verifique:
 1. Proxy está na raiz do projeto (`proxy.ts`)
 2. Configuração do matcher está correta
 3. Sem proxy conflitante
 
-## Sincronização de Secrets
+## SINCRONIZAÇÃO DE SECRETS
 
 ### AUTH_SECRET
 
@@ -827,7 +827,7 @@ JWT_ALGORITHM=RS256
 - A chave pública é exposta via JWKS endpoint (`/oidc/jwks`)
 - A API valida a assinatura usando a chave pública do JWKS
 
-### Resumo de Configuração
+### RESUMO DE CONFIGURAÇÃO
 
 | Serviço | Variável | Valor |
 |---------|----------|-------|
@@ -839,7 +839,7 @@ JWT_ALGORITHM=RS256
 | API Backend | `AUTH_ISSUER_URL` | `http://localhost:3000/oidc` |
 | API Backend | `JWT_ALGORITHM` | `RS256` |
 
-## Resumo de Recursos de Segurança
+## RESUMO DE RECURSOS DE SEGURANÇA
 
 ✅ **PKCE (Proof Key for Code Exchange)** - Previne interceptação de código de autorização
 ✅ **Parâmetro State** - Proteção contra CSRF
@@ -850,14 +850,14 @@ JWT_ALGORITHM=RS256
 ✅ **Chamadas de API com Tipagem** - Suporte completo TypeScript
 ✅ **Assinatura Assimétrica JWT** - RS256 com chaves do Janus IDP
 
-## Próximos Passos
+## PRÓXIMOS PASSOS
 
 1. **Configurar o Janus IDP**: Configure sua instância do Janus IDP e registre a aplicação
 2. **Atualizar URIs de Redirecionamento**: Adicione `http://localhost:3001/api/auth/callback/janus` ao seu cliente do Janus IDP
 3. **Adicionar Controle de Acesso Baseado em Roles**: Estenda o proxy para controle de acesso baseado em roles
 4. **Testar Integração**: Verifique o fluxo de autenticação com sua API de backend
 
-## Melhores Práticas
+## MELHORES PRÁTICAS
 
 1. **Sempre use fetch do lado do servidor**: Use [`authenticatedFetch`](../lib/authenticated-fetch.ts:1) em componentes do servidor e rotas de API
 2. **Trate erros com elegância**: Envolva chamadas de API em blocos try-catch
@@ -865,7 +865,7 @@ JWT_ALGORITHM=RS256
 4. **Use HTTPS em produção**: Sempre use HTTPS para fluxos OAuth2
 5. **Valide tokens**: Considere validar assinaturas JWT na API de backend
 
-## Recursos Adicionais
+## RECURSOS ADICIONAIS
 
 - [Documentação do NextAuth.js](https://authjs.dev/)
 - [RFC do OAuth 2.0](https://tools.ietf.org/html/rfc6749)
