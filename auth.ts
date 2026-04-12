@@ -44,6 +44,18 @@ function isValidAudience(aud: JanusClaims["aud"], expected: string): boolean {
   return aud === expected;
 }
 
+function resolveAuthResource(): string {
+  const authResource = process.env.AUTH_RESOURCE;
+
+  if (!authResource) {
+    throw new Error(
+      "AUTH_RESOURCE must be configured to send the OAuth2 resource indicator and validate the expected audience."
+    );
+  }
+
+  return authResource;
+}
+
 function mergeTokenClaims(
   token: JWT,
   options: {
@@ -144,6 +156,7 @@ async function refreshJanusToken(token: JWT): Promise<JWT> {
 function JanusProvider(clientId: string, clientSecret: string): NextAuthConfig["providers"][number] {
   const issuerUrl = process.env.AUTH_ISSUER_URL;
   const internalUrl = process.env.AUTH_JANUS_INTERNAL_URL || issuerUrl;
+  const authResource = resolveAuthResource();
 
   if (!issuerUrl || !internalUrl) {
     throw new Error("AUTH_ISSUER_URL and AUTH_JANUS_INTERNAL_URL must be configured");
@@ -161,7 +174,7 @@ function JanusProvider(clientId: string, clientSecret: string): NextAuthConfig["
       url: `${issuerUrl}/auth`,
       params: {
         scope: process.env.AUTH_SCOPE || "openid profile email offline_access",
-        resource: process.env.AUTH_AUDIENCE,
+        resource: authResource,
       },
     },
     token: `${internalUrl}/token`,
@@ -209,7 +222,7 @@ const authOptions: NextAuthConfig = {
           ...accessClaims,
           ...idTokenClaims,
         };
-        const expectedAudience = process.env.AUTH_AUDIENCE;
+        const expectedAudience = resolveAuthResource();
         const profileRoles = (user as { roles?: unknown }).roles;
 
         if (expectedAudience && !isValidAudience(claims.aud, expectedAudience)) {

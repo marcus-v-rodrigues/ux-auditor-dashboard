@@ -253,13 +253,13 @@ GET http://localhost:3000/oidc/auth?
   client_id=ux-auditor&
   redirect_uri=http://localhost:3001/api/auth/callback/janus&
   scope=openid profile email offline_access&
-  resource=http://localhost:3000/oidc/api&
+  resource=ux-auditor-api&
   code_challenge=<hash gerado>&
   code_challenge_method=S256&
   state=<random string>
 ```
 
-**Nota:** O parâmetro `resource` é o Resource Indicator (RFC 8707) que define qual será a audience (`aud`) do JWT emitido.
+**Nota:** O parâmetro `resource` é o Resource Indicator (RFC 8707) que define a audience (`aud`) do JWT emitido. O `client_id` continua sendo `ux-auditor`; ele identifica o client OAuth, enquanto `resource` identifica a API protegida que vai aceitar o token.
 
 ### 4. Callback no Endpoint de Token
 ```
@@ -399,8 +399,8 @@ AUTH_JANUS_INTERNAL_URL=http://janus-service:3000/oidc
 AUTH_CLIENT_ID=ux-auditor
 AUTH_CLIENT_SECRET=janus_dashboard_secret
 AUTH_SCOPE=openid profile email offline_access
-# Audience esperada no JWT (resource indicator) - deve corresponder à configuração do Janus IDP
-AUTH_AUDIENCE=http://localhost:3000/oidc/api
+# Resource indicator da API protegida; define o `aud` do access token JWT
+AUTH_RESOURCE=ux-auditor-api
 
 # Configuração da API
 UX_AUDITOR_API_URL=http://localhost:8000
@@ -411,10 +411,10 @@ UX_AUDITOR_API_URL=http://localhost:8000
 - `AUTH_INTERNAL_URL`: URL interna para comunicação entre containers Docker. Hoje o helper server-side usa `auth()` diretamente, então essa variável só é relevante se outro fluxo legado ainda depender dela.
 - `AUTH_ISSUER_URL`: URL pública do issuer OIDC do Janus IDP (acessada pelo navegador do usuário)
 - `AUTH_JANUS_INTERNAL_URL`: URL interna para comunicação servidor-servidor no Docker. **Obrigatória quando executando em containers Docker**. Deve usar o nome do serviço Docker (`janus-service`) para resolver corretamente na rede interna.
-- `AUTH_CLIENT_ID`: Deve ser `ux-auditor` conforme especificado
+- `AUTH_CLIENT_ID`: Continua sendo `ux-auditor`; esse é o client OAuth, não o audience do token
 - `AUTH_CLIENT_SECRET`: Deve ser `janus_dashboard_secret` conforme especificado
 - `AUTH_SCOPE`: Deve incluir `offline_access` para obter refresh_token
-- `AUTH_AUDIENCE`: Audience esperada no JWT. Deve corresponder ao resource indicator configurado no Janus IDP. Usada para validação de segurança.
+- `AUTH_RESOURCE`: Resource indicator enviado na authorization request. Define o audience (`aud`) do access token JWT emitido pelo Janus e deve representar a UX Auditor API protegida.
 - O callback URL deve ser registrado no Janus IDP: `http://localhost:3001/api/auth/callback/janus`
 
 ### VARIÁVEIS DE AMBIENTE DA API (FASTAPI BACKEND)
@@ -495,6 +495,7 @@ AUTH_ISSUER_URL=http://localhost:3000/oidc
 AUTH_CLIENT_ID=ux-auditor
 AUTH_CLIENT_SECRET=janus_dashboard_secret
 AUTH_SCOPE=openid profile email offline_access
+AUTH_RESOURCE=ux-auditor-api
 
 # Configuração da API
 UX_AUDITOR_API_URL=http://localhost:8000
@@ -509,6 +510,7 @@ openssl rand -base64 32
 **Importante sobre PKCE:**
 - O NextAuth.js v5 implementa PKCE automaticamente
 - O escopo `offline_access` é necessário para obter `refresh_token`
+- O parâmetro `resource` é enviado explicitamente com o valor de `AUTH_RESOURCE`
 - O callback URL deve ser registrado no Janus IDP: `http://localhost:3001/api/auth/callback/janus`
 
 ### 3. INICIAR O SERVIDOR DE DESENVOLVIMENTO

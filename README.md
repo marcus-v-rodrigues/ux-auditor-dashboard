@@ -45,6 +45,8 @@ AUTH_ISSUER_URL=http://localhost:3000/oidc
 AUTH_CLIENT_ID=ux-auditor
 AUTH_CLIENT_SECRET=janus_dashboard_secret
 AUTH_SCOPE=openid profile email offline_access
+# Resource indicator que define o `aud` do access token JWT emitido pelo Janus
+AUTH_RESOURCE=ux-auditor-api
 
 # Configuração da API
 UX_AUDITOR_API_URL=http://localhost:8000
@@ -127,4 +129,3 @@ npm run lint
 ## Licença
 
 Este projeto é parte do trabalho de mestrado e está sob licença acadêmica.
-
