@@ -9,18 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, FileJson, Sparkles, AlertCircle } from 'lucide-react';
 import {
-  BoundingBox,
   InsightEvent,
-  InsightEventPayload,
-  InsightSeverity,
-  InsightType,
   TelemetryLog,
-  TelemetryLogPayload,
   SessionProcessResponse,
   PsychometricData,
   IntentAnalysis,
   RrwebSessionEvent,
 } from '@/types/dashboard';
+import {
+  normalizeInsightEvent,
+  normalizeIntentAnalysisData,
+  normalizePsychometricData,
+  normalizeTelemetryLogs,
+  normalizeText,
+} from '@/lib/normalization';
 
 /**
  * Página principal do Dashboard UX Auditor
@@ -59,96 +61,6 @@ export default function DashboardPage() {
   // Mensagem de erro caso a análise falhe
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  function safeNumber(value: unknown, fallback = 0): number {
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-  }
-
-  function safeString(value: unknown, fallback = ""): string {
-    return typeof value === "string" ? value : fallback;
-  }
-
-  function safeStringArray(value: unknown): string[] {
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-      : [];
-  }
-
-  function normalizeText(value: unknown, fallback: string): string {
-    const text = safeString(value, "").trim();
-    return text.length > 0 ? text : fallback;
-  }
-
-  function normalizeBoundingBox(value: unknown): BoundingBox | undefined {
-    if (!value || typeof value !== "object") {
-      return undefined;
-    }
-
-    const box = value as Record<string, unknown>;
-    return {
-      top: safeNumber(box.top, 0),
-      left: safeNumber(box.left, 0),
-      width: safeNumber(box.width, 0),
-      height: safeNumber(box.height, 0),
-    };
-  }
-
-  function normalizeInsightEvent(value: InsightEventPayload | unknown, index: number): InsightEvent {
-    const insight = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-    const type = safeString(insight.type, "usability");
-    const severity = safeString(insight.severity, "medium");
-
-    return {
-      id: safeString(insight.id, `insight-${index}`),
-      timestamp: safeNumber(insight.timestamp, 0),
-      type: (type === "accessibility" || type === "usability" || type === "heuristic" ? type : "usability") as InsightType,
-      severity: (severity === "low" || severity === "medium" || severity === "critical" ? severity : "medium") as InsightSeverity,
-      message: normalizeText(insight.message, "Detalhe do insight indisponível."),
-      boundingBox: normalizeBoundingBox(insight.boundingBox),
-    };
-  }
-
-  function normalizeTelemetryLog(value: TelemetryLogPayload | unknown, index: number): TelemetryLog {
-    const log = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-
-    return {
-      id: safeString(log.id, `log-${index}`),
-      timestamp: safeNumber(log.timestamp, 0),
-      eventType: normalizeText(log.eventType, "unknown"),
-      details: normalizeText(log.details, "Detalhes indisponíveis."),
-    };
-  }
-
-  function normalizePsychometrics(value: SessionProcessResponse["psychometrics"]): PsychometricData | null {
-    if (!value || typeof value !== "object") {
-      return null;
-    }
-
-    return {
-      engagement_score: safeNumber(value.engagement_score, 0),
-      frustration_score: safeNumber(value.frustration_score, 0),
-      confusion_score: safeNumber(value.confusion_score, 0),
-      behavior_patterns: safeStringArray(value.behavior_patterns),
-    };
-  }
-
-  function normalizeIntentAnalysis(value: SessionProcessResponse["intent_analysis"]): IntentAnalysis | null {
-    if (!value || typeof value !== "object") {
-      return null;
-    }
-
-    return {
-      primary_intent: normalizeText(value.primary_intent, "Não identificado"),
-      secondary_intents: safeStringArray(value.secondary_intents),
-      success_probability: safeNumber(value.success_probability, 0),
-      barriers: safeStringArray(value.barriers),
-    };
-  }
-
-  function normalizeTelemetryLogs(value: SessionProcessResponse["stats"]): TelemetryLog[] {
-    const actions = value?.user_actions;
-    return Array.isArray(actions) ? actions.map((action, index) => normalizeTelemetryLog(action, index)) : [];
-  }
-
   /**
    * Callback executado quando o arquivo é carregado com sucesso
    * Inicializa todos os estados necessários para a sessão
@@ -159,7 +71,7 @@ export default function DashboardPage() {
   const handleFileLoaded = (uploadedEvents: RrwebSessionEvent[], uuid: string) => {
     setEvents(uploadedEvents);
     setSessionUuid(uuid);
-    setFileName(`Session: ${uuid.slice(0, 8)}...`);
+    setFileName(`Sessão: ${uuid.slice(0, 8)}...`);
     // Limpa estados de sessões anteriores
     setLogs([]);
     setInsights([]);
@@ -228,7 +140,7 @@ export default function DashboardPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Erro ${response.status}`);
+        throw new Error(errorData.error || `Erro HTTP ${response.status}`);
       }
 
       const data: SessionProcessResponse = await response.json();
@@ -246,17 +158,17 @@ export default function DashboardPage() {
       setNarrative(normalizeText(data.narrative, ""));
 
       // Atualiza os dados psicométricos extraídos
-      setPsychometrics(normalizePsychometrics(data.psychometrics));
+      setPsychometrics(normalizePsychometricData(data.psychometrics));
 
       // Atualiza a análise de intenção do usuário
-      setIntentAnalysis(normalizeIntentAnalysis(data.intent_analysis));
+      setIntentAnalysis(normalizeIntentAnalysisData(data.intent_analysis));
 
       // Mapeia as ações do usuário para o estado de logs do TelemetryPanel
       setLogs(normalizeTelemetryLogs(data.stats));
 
     } catch (error) {
       // Tratamento de erros robusto
-      console.error("Error during AI analysis:", error);
+      console.error("Erro durante a análise com IA:", error);
       
       // Define a mensagem de erro apropriada para exibição na UI
       if (error instanceof Error) {
@@ -264,7 +176,7 @@ export default function DashboardPage() {
       } else if (typeof error === 'string') {
         setErrorMessage(error);
       } else {
-        setErrorMessage("An unexpected error occurred during the analysis. Please try again.");
+        setErrorMessage("Ocorreu um erro inesperado durante a análise. Tente novamente.");
       }
     } finally {
       // Garante que o estado de processamento seja finalizado
@@ -340,16 +252,16 @@ export default function DashboardPage() {
                disabled={isProcessing}
                className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
              >
-               {isProcessing ? (
+                {isProcessing ? (
                  <>
                    {/* Ícone de carregamento animado durante o processamento */}
                    <Sparkles className="h-4 w-4 animate-spin" />
-                   Processing with AI...
+                   Processando com IA...
                  </>
                ) : (
                  <>
                    <Sparkles className="h-4 w-4" />
-                   Start AI Audit
+                   Iniciar auditoria com IA
                  </>
                )}
              </Button>
@@ -367,7 +279,7 @@ export default function DashboardPage() {
         {/* Indicador de narrativa gerada pela IA */}
         {narrative && !isProcessing && (
           <div className="mx-4 mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-md">
-            <p className="text-xs text-purple-300 font-medium mb-1">Análise da IA:</p>
+            <p className="text-xs text-purple-300 font-medium mb-1">Diagnóstico da IA:</p>
             <p className="text-sm text-foreground">{narrative}</p>
           </div>
         )}

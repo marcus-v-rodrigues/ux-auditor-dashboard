@@ -28,7 +28,7 @@ export function SignInForm({ callbackUrl }: SignInFormProps) {
         redirect: true 
       });
     } catch (error) {
-      console.error("Erro ao iniciar login:", error);
+      console.error("Erro ao iniciar autenticação:", error);
       setIsLoading(false);
     }
   };
@@ -41,7 +41,7 @@ export function SignInForm({ callbackUrl }: SignInFormProps) {
         size="lg"
         disabled={isLoading}
       >
-        {isLoading ? "Carregando..." : "Sign in with Janus IDP"}
+        {isLoading ? "Carregando..." : "Entrar com Janus IDP"}
       </Button>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Brain } from "lucide-react";
+import { normalizeText, safeNumber } from "@/lib/normalization";
 
 /**
  * Interface para os dados psicométricos do resumo semântico
@@ -23,37 +24,8 @@ interface SemanticSummaryProps {
   psychometrics?: PsychometricsSummary | null;
 }
 
-function safeNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function safeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function normalizeText(value: unknown, fallback: string): string {
-  const text = safeString(value, "").trim();
-  return text.length > 0 ? text : fallback;
-}
-
-function normalizePsychometrics(value: PsychometricsSummary | null | undefined): PsychometricsSummary {
-  return {
-    frustration_score: safeNumber(value?.frustration_score, 0),
-    cognitive_load_score: safeNumber(value?.cognitive_load_score, 0),
-  };
-}
-
 /**
- * Função auxiliar para determinar a cor do indicador de progresso
- * baseada no valor do score.
- * 
- * Regras de cores:
- * - Verde: score < 3 (baixo)
- * - Amarelo: score entre 4 e 7 (médio)
- * - Vermelho: score > 8 (alto)
- * 
- * @param score - Valor do score (0-10)
- * @returns String com as classes CSS apropriadas para o indicador
+ * Retorna a cor da barra de progresso de acordo com o score normalizado.
  */
 function getProgressColor(score: number): string {
   if (score < 3) {
@@ -71,11 +43,7 @@ function getProgressColor(score: number): string {
 }
 
 /**
- * Função auxiliar para determinar a cor do texto do badge
- * seguindo a mesma lógica das barras de progresso.
- * 
- * @param score - Valor do score (0-10)
- * @returns String com as classes CSS apropriadas para o texto
+ * Retorna a cor do texto do badge seguindo a mesma lógica da barra.
  */
 function getTextColor(score: number): string {
   if (score < 3) {
@@ -89,10 +57,7 @@ function getTextColor(score: number): string {
 }
 
 /**
- * Função auxiliar para obter o rótulo descritivo do score
- * 
- * @param score - Valor do score (0-10)
- * @returns String com o rótulo descritivo
+ * Converte o score em um rótulo curto para leitura rápida.
  */
 function getScoreLabel(score: number): string {
   if (score < 3) {
@@ -120,7 +85,10 @@ function getScoreLabel(score: number): string {
  */
 export function SemanticSummary({ narrative, psychometrics }: SemanticSummaryProps) {
   const safeNarrative = normalizeText(narrative, "Sem resumo disponível.");
-  const safePsychometrics = normalizePsychometrics(psychometrics);
+  const safePsychometrics = {
+    frustration_score: safeNumber(psychometrics?.frustration_score, 0),
+    cognitive_load_score: safeNumber(psychometrics?.cognitive_load_score, 0),
+  };
 
   // Calcula valores percentuais para as barras de progresso (escala 0-10 para 0-100%)
   const frustrationPercent = (safePsychometrics.frustration_score / 10) * 100;

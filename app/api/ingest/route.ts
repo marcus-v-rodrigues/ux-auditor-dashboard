@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     if (!Array.isArray(body)) {
       return NextResponse.json(
-        { error: "Invalid request body. Expected an array of rrweb events." },
+        { error: "Corpo da requisição inválido. Era esperado um array de eventos rrweb." },
         { status: 400 }
       );
     }
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error in /api/ingest:", error);
+    console.error("Erro em /api/ingest:", error);
 
     if (error instanceof AuthenticatedFetchError) {
       return NextResponse.json(
@@ -35,10 +35,10 @@ export async function POST(request: NextRequest) {
     }
 
     const statusCode = error instanceof Error ? 500 : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
 
     return NextResponse.json(
-      { error: `Failed to ingest session: ${message}` },
+      { error: `Falha ao importar a sessão: ${message}` },
       { status: statusCode }
     );
   }

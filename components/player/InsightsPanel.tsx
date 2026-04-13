@@ -1,8 +1,15 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { InsightEvent, InsightSeverity, InsightType, PsychometricData, IntentAnalysis } from "@/types/dashboard";
+import { InsightEvent, PsychometricData, IntentAnalysis } from "@/types/dashboard";
 import { Eye, AlertTriangle, CheckCircle2, Brain, Target, BarChart3 } from "lucide-react";
+import {
+  normalizeInsightEvent,
+  normalizeIntentAnalysisData,
+  normalizePsychometricData,
+  normalizeText,
+  safeNumber,
+} from "@/lib/normalization";
 import { SemanticSummary } from "./SemanticSummary";
 import { SemanticDiagnostics } from "./SemanticDiagnostics";
 
@@ -22,90 +29,11 @@ interface Props {
   narrative?: string | null;
 }
 
-interface SafePsychometrics {
-  engagement_score: number;
-  frustration_score: number;
-  confusion_score: number;
-  behavior_patterns: string[];
-}
-
 interface SafeIntentAnalysis {
   primary_intent: string;
   secondary_intents: string[];
   success_probability: number;
   barriers: string[];
-}
-
-interface SafeInsightEvent {
-  id: string;
-  timestamp: number;
-  type: InsightType;
-  severity: InsightSeverity;
-  message: string;
-}
-
-function safeNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function safePercent(value: unknown): number {
-  const numeric = safeNumber(value, 0);
-  return Math.min(100, Math.max(0, numeric));
-}
-
-function safeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function safeStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : [];
-}
-
-function normalizeText(value: unknown, fallback: string): string {
-  const text = safeString(value, "").trim();
-  return text.length > 0 ? text : fallback;
-}
-
-function normalizePrimaryIntent(value: unknown): string {
-  return normalizeText(value, "Não identificado");
-}
-
-function normalizeMessage(value: unknown): string {
-  return normalizeText(value, "Detalhe do insight indisponível.");
-}
-
-function normalizePsychometrics(value: PsychometricData | null | undefined): SafePsychometrics {
-  return {
-    engagement_score: safePercent(value?.engagement_score),
-    frustration_score: safePercent(value?.frustration_score),
-    confusion_score: safePercent(value?.confusion_score),
-    behavior_patterns: safeStringArray(value?.behavior_patterns),
-  };
-}
-
-function normalizeIntentAnalysis(value: IntentAnalysis | null | undefined): SafeIntentAnalysis {
-  return {
-    primary_intent: normalizePrimaryIntent(value?.primary_intent),
-    secondary_intents: safeStringArray(value?.secondary_intents),
-    success_probability: safePercent(value?.success_probability),
-    barriers: safeStringArray(value?.barriers),
-  };
-}
-
-function normalizeInsightEvent(value: unknown, index: number): SafeInsightEvent {
-  const insight = value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
-  const type = safeString(insight.type, "usability");
-  const severity = safeString(insight.severity, "medium");
-
-  return {
-    id: safeString(insight.id, `insight-${index}`),
-    timestamp: safeNumber(insight.timestamp, 0),
-    type: type === "accessibility" || type === "usability" || type === "heuristic" ? type : "usability",
-    severity: severity === "low" || severity === "medium" || severity === "critical" ? severity : "medium",
-    message: normalizeMessage(insight.message),
-  };
 }
 
 /**
@@ -128,9 +56,19 @@ function normalizeInsightEvent(value: unknown, index: number): SafeInsightEvent 
  */
 export function InsightsPanel({ insights, currentTime, psychometrics, intentAnalysis, narrative }: Props) {
   const safeCurrentTime = safeNumber(currentTime, 0);
-  const safePsychometrics = normalizePsychometrics(psychometrics);
-  const safeIntentAnalysis = normalizeIntentAnalysis(intentAnalysis);
-  const safeNarrative = safeString(narrative, "");
+  const safePsychometrics = normalizePsychometricData(psychometrics) ?? {
+    engagement_score: 0,
+    frustration_score: 0,
+    confusion_score: 0,
+    behavior_patterns: [],
+  };
+  const safeIntentAnalysis: SafeIntentAnalysis = normalizeIntentAnalysisData(intentAnalysis) ?? {
+    primary_intent: "Não identificado",
+    secondary_intents: [],
+    success_probability: 0,
+    barriers: [],
+  };
+  const safeNarrative = normalizeText(narrative, "");
   const hasNarrative = safeNarrative.trim().length > 0;
   const safeInsights = Array.isArray(insights)
     ? insights.map((insight, index) => normalizeInsightEvent(insight, index))
@@ -161,7 +99,7 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
       <div className="p-4 border-b border-border bg-card/50">
         <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
           <Eye className="w-4 h-4 text-purple-500" />
-          AI Diagnostics
+          Diagnóstico por IA
         </h2>
       </div>
       
@@ -198,9 +136,9 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
             <div className="space-y-2">
               {/* Barra de engajamento */}
               <div>
-                <div className="flex justify-between text-[10px] mb-1">
-                  <span className="text-muted-foreground">Engajamento</span>
-                  <span className="text-green-400">{safePsychometrics.engagement_score}%</span>
+              <div className="flex justify-between text-[10px] mb-1">
+                <span className="text-muted-foreground">Engajamento</span>
+                <span className="text-green-400">{safePsychometrics.engagement_score}%</span>
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                   <div 
@@ -265,8 +203,8 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
             </h3>
             {/* Intenção principal */}
             <div className="mb-2">
-              <p className="text-[10px] text-muted-foreground mb-1">Intenção Principal:</p>
-              <p className="text-xs text-foreground font-medium">{safeIntentAnalysis.primary_intent}</p>
+            <p className="text-[10px] text-muted-foreground mb-1">Intenção Principal:</p>
+            <p className="text-xs text-foreground font-medium">{safeIntentAnalysis.primary_intent}</p>
             </div>
             {/* Intenções secundárias */}
             {hasSecondaryIntents && (
@@ -297,7 +235,7 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
             {/* Barreiras identificadas */}
             {hasBarriers && (
               <div className="mt-2 pt-2 border-t border-emerald-500/20">
-                <p className="text-[10px] text-muted-foreground mb-1">Barreiras:</p>
+            <p className="text-[10px] text-muted-foreground mb-1">Barreiras:</p>
                 <ul className="text-[10px] text-red-300 space-y-1">
                   {safeIntentAnalysis.barriers.map((barrier, idx) => (
                     <li key={idx} className="flex items-start gap-1">
@@ -323,7 +261,7 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
         {!hasActiveInsights ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground space-y-2">
             <CheckCircle2 className="w-8 h-8 opacity-20" />
-            <p className="text-xs">No anomalies at the moment.</p>
+            <p className="text-xs">Nenhuma anomalia no momento.</p>
           </div>
         ) : (
           /* Lista de insights ativos */

@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     // Validação básica dos campos
     if (!name || !email || !password) {
       return NextResponse.json(
-        { error: "All fields are required" },
+        { error: "Todos os campos são obrigatórios" },
         { status: 400 }
       );
     }
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return NextResponse.json(
-        { error: "Invalid email format" },
+        { error: "Formato de e-mail inválido" },
         { status: 400 }
       );
     }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     // Validação do tamanho da senha
     if (password.length < 8) {
       return NextResponse.json(
-        { error: "Password must be at least 8 characters long" },
+        { error: "A senha deve ter pelo menos 8 caracteres" },
         { status: 400 }
       );
     }
@@ -87,14 +87,14 @@ export async function POST(request: NextRequest) {
     // Trata resposta de conflito (e-mail duplicado)
     if (response.status === 409) {
       return NextResponse.json(
-        { error: "Email already registered" },
+        { error: "E-mail já cadastrado" },
         { status: 409 }
       );
     }
 
     // Trata outros erros da API
     if (!response.ok) {
-      let errorMessage = "Error creating account";
+      let errorMessage = "Erro ao criar a conta";
       
       try {
         const errorData = await response.json();
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        message: "User created successfully",
+        message: "Usuário criado com sucesso",
         user: {
           id: userData.id,
           name: userData.name,
@@ -130,13 +130,13 @@ export async function POST(request: NextRequest) {
     // Trata erro de conexão com a API
     if (error instanceof TypeError && error.message.includes("fetch")) {
       return NextResponse.json(
-        { error: "Connection error with the server. Try again." },
+        { error: "Erro de conexão com o servidor. Tente novamente." },
         { status: 503 }
       );
     }
 
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: "Erro interno do servidor" },
       { status: 500 }
     );
   }

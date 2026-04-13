@@ -2,16 +2,16 @@ import Link from "next/link";
 import { SignInForm } from "@/components/auth/SignInForm";
 
 /**
- * Página de Sign In
- * Permite autenticação via Janus IDP
- * Nota: searchParams é assíncrono no Next.js 15+
+ * Página de entrada no sistema.
+ * A autenticação é feita via Janus IDP.
+ * Observação: `searchParams` é assíncrono no Next.js 15+.
  */
 export default async function SignInPage({
   searchParams,
 }: {
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
-  // Resolve a Promise do searchParams (Next.js 15+)
+  // Resolve os parâmetros de busca antes de renderizar a tela.
   const params = await searchParams;
   const callbackUrl = params.callbackUrl || "/";
 
@@ -20,10 +20,10 @@ export default async function SignInPage({
       <div className="w-full max-w-md space-y-8 rounded-2xl bg-white p-8 shadow-xl dark:bg-slate-900">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Sign in to UX Auditor Dashboard
+            Entre no UX Auditor
           </h2>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-            Authenticate using your Janus IDP account
+            Autentique-se com sua conta Janus IDP
           </p>
         </div>
 
@@ -31,17 +31,17 @@ export default async function SignInPage({
 
         <div className="text-center text-sm text-slate-500 dark:text-slate-400">
           <p>
-            By signing in, you agree to our Terms of Service and Privacy Policy.
+            Ao entrar, você concorda com os Termos de Uso e a Política de Privacidade.
           </p>
         </div>
 
         <div className="text-center text-sm text-slate-600 dark:text-slate-400">
-          Don&apos;t have an account?{" "}
+          Não tem uma conta?{" "}
           <Link
             href="/auth/register"
             className="font-medium text-primary underline-offset-4 hover:underline"
           >
-            Create account
+            Criar conta
           </Link>
         </div>
       </div>

@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "UX Auditor Dashboard",
-  description: "Dashboard BFF para análise de sessões do UX Auditor",
+  description: "Painel para análise de sessões do UX Auditor",
 };
 
 export default function RootLayout({

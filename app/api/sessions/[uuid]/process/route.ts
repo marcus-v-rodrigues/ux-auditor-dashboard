@@ -16,7 +16,7 @@ export async function POST(
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error processing session:", error);
+    console.error("Erro ao processar a sessão:", error);
 
     if (error instanceof AuthenticatedFetchError) {
       return NextResponse.json(
@@ -29,7 +29,7 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Error processing session" },
+      { error: error instanceof Error ? error.message : "Erro ao processar a sessão" },
       { status: 500 }
     );
   }

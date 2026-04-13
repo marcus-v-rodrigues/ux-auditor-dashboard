@@ -39,7 +39,7 @@ export function TelemetryPanel({ logs, currentTime }: Props) {
       <div className="p-4 border-b border-border bg-card/50">
         <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
           <Activity className="w-4 h-4 text-primary" />
-          Telemetry (HID)
+          Telemetria (HID)
         </h2>
       </div>
       

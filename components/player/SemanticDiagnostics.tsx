@@ -2,6 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PsychometricData, IntentAnalysis } from "@/types/dashboard";
 import { Quote, Brain, Activity, TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
+import {
+  normalizeIntentAnalysisData,
+  normalizePsychometricData,
+  normalizeText,
+} from "@/lib/normalization";
 
 /**
  * Tipo para o status da jornada do usuário
@@ -23,83 +28,26 @@ interface SemanticDiagnosticsProps {
   intent_analysis?: IntentAnalysis | null;
 }
 
-interface SafePsychometrics {
-  engagement_score: number;
-  frustration_score: number;
-  confusion_score: number;
-  behavior_patterns: string[];
-}
-
 interface SafeIntentAnalysis {
   primary_intent: string;
   success_probability: number;
   barriers: string[];
 }
 
-function safeNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function safePercent(value: unknown): number {
-  const numeric = safeNumber(value, 0);
-  return Math.min(100, Math.max(0, numeric));
-}
-
-function safeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function safeStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : [];
-}
-
-function normalizeText(value: unknown, fallback: string): string {
-  const text = safeString(value, "").trim();
-  return text.length > 0 ? text : fallback;
-}
-
-function normalizePsychometrics(value: PsychometricData | null | undefined): SafePsychometrics {
-  return {
-    engagement_score: safePercent(value?.engagement_score),
-    frustration_score: safePercent(value?.frustration_score),
-    confusion_score: safePercent(value?.confusion_score),
-    behavior_patterns: safeStringArray(value?.behavior_patterns),
-  };
-}
-
-function normalizeIntentAnalysis(value: IntentAnalysis | null | undefined): SafeIntentAnalysis {
-  return {
-    primary_intent: normalizeText(value?.primary_intent, "Não identificado"),
-    success_probability: safePercent(value?.success_probability),
-    barriers: safeStringArray(value?.barriers),
-  };
-}
-
 /**
- * Função auxiliar para determinar o status da jornada do usuário
- * baseada nos dados psicométricos e análise de intenção.
- * 
- * Lógica de determinação:
- * - looping: alta frustração (>70%) com baixa probabilidade de sucesso (<30%)
- * - erratic: alta confusão (>70%) e múltiplas barreiras
- * - progressing: casos restantes (comportamento normal)
- * 
- * @param psychometrics - Dados psicométricos do usuário
- * @param intentAnalysis - Análise de intenção do usuário
- * @returns Status da jornada determinado
+ * Determina o estado da jornada a partir dos sinais semânticos normalizados.
+ * A lógica privilegia os cenários mais graves antes de cair no estado padrão.
  */
 function determineJourneyStatus(
   psychometrics: PsychometricData, 
   intentAnalysis: IntentAnalysis
 ): JourneyStatus {
-  // Verifica se o usuário está em loop (alta frustração + baixa probabilidade de sucesso)
+  // Prioridade 1: frustração alta combinada com baixa probabilidade de sucesso.
   if (psychometrics.frustration_score > 70 && intentAnalysis.success_probability < 30) {
     return 'looping';
   }
   
-  // Verifica comportamento errático (alta confusão + múltiplas barreiras)
+  // Prioridade 2: confusão alta combinada com múltiplas barreiras.
   if (psychometrics.confusion_score > 70 && intentAnalysis.barriers.length >= 2) {
     return 'erratic';
   }
@@ -109,10 +57,7 @@ function determineJourneyStatus(
 }
 
 /**
- * Função auxiliar para obter as configurações visuais do badge de status
- * 
- * @param status - Status da jornada do usuário
- * @returns Objeto com classes CSS, ícone e texto do badge
+ * Retorna a configuração visual do badge de status da jornada.
  */
 function getJourneyStatusConfig(status: JourneyStatus): {
   className: string;
@@ -220,12 +165,21 @@ export function SemanticDiagnostics({
   intent_analysis 
 }: SemanticDiagnosticsProps) {
   const safeNarrative = normalizeText(narrative, "Sem narrativa disponível.");
-  const safePsychometrics = normalizePsychometrics(psychometrics);
-  const safeIntentAnalysis = normalizeIntentAnalysis(intent_analysis);
+  const safePsychometrics = normalizePsychometricData(psychometrics) ?? {
+    engagement_score: 0,
+    frustration_score: 0,
+    confusion_score: 0,
+    behavior_patterns: [],
+  };
+  const safeIntentAnalysis: SafeIntentAnalysis = normalizeIntentAnalysisData(intent_analysis) ?? {
+    primary_intent: "Não identificado",
+    success_probability: 0,
+    barriers: [],
+  };
   const hasPrimaryIntent = safeIntentAnalysis.primary_intent !== "Não identificado";
   const hasBarriers = safeIntentAnalysis.barriers.length > 0;
 
-  // Determina o status da jornada baseado nos dados
+  // Determina o status da jornada com base nos dados normalizados.
   const journeyStatus = determineJourneyStatus(
     {
       engagement_score: safePsychometrics.engagement_score,
@@ -242,9 +196,9 @@ export function SemanticDiagnostics({
   );
   const statusConfig = getJourneyStatusConfig(journeyStatus);
   
-  // Converte scores de 0-100 para escala 0-10
+  // Converte scores de 0-100 para a escala 0-10 usada na visualização.
   const frustrationScore = safePsychometrics.frustration_score / 10;
-  const cognitiveLoadScore = safePsychometrics.confusion_score / 10; // Usa confusion como proxy para carga cognitiva
+  const cognitiveLoadScore = safePsychometrics.confusion_score / 10; // Usa confusão como proxy para carga cognitiva.
   
   // Calcula valores percentuais para as barras de progresso
   const frustrationPercent = frustrationScore * 10;

@@ -38,14 +38,14 @@ function ErrorContent() {
         <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
       </div>
       <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-        Authentication Error
+        Erro de autenticação
       </h2>
       <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
         {errorMessage}
       </p>
       {error ? (
         <p className="mt-1 text-xs font-mono text-slate-500 dark:text-slate-500">
-          Error code: {error}
+          Código do erro: {error}
         </p>
       ) : null}
     </div>
@@ -63,10 +63,10 @@ export default function AuthErrorPage() {
                 <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Authentication Error
+                Erro de autenticação
               </h2>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                Loading...
+                Carregando...
               </p>
             </div>
           }
@@ -80,14 +80,14 @@ export default function AuthErrorPage() {
             className="w-full"
             variant="default"
           >
-            Try Again
+            Tentar novamente
           </Button>
           <Button
             onClick={() => (window.location.href = "/")}
             className="w-full"
             variant="outline"
           >
-            Go to Home Page
+            Ir para a página inicial
           </Button>
         </div>
       </div>

@@ -225,7 +225,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [isPlaying, playerInstance, duration, handleTimeUpdate]); // Dependências limpas e otimizadas
+  }, [isPlaying, playerInstance, duration]); // `handleTimeUpdate` é um effect event e não entra nas dependências.
 
   /**
    * 3. FUNÇÕES DE CONTROLE DE REPRODUÇÃO

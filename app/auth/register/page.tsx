@@ -28,9 +28,9 @@ import {
  * - password: mínimo de 8 caracteres
  */
 const registerSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().min(1, "O nome é obrigatório"),
+  email: z.string().email("Endereço de e-mail inválido"),
+  password: z.string().min(8, "A senha deve ter pelo menos 8 caracteres"),
 });
 
 /**
@@ -97,7 +97,7 @@ export default function RegisterPage() {
 
       // Trata resposta de sucesso (200 ou 201)
       if (response.status === 200 || response.status === 201) {
-        toast.success("Account created successfully!");
+        toast.success("Conta criada com sucesso!");
 
         // Aguarda 2 segundos antes de redirecionar para o login
         setTimeout(() => {
@@ -108,16 +108,16 @@ export default function RegisterPage() {
 
       // Trata erro de conflito - e-mail já cadastrado (409)
       if (response.status === 409) {
-        toast.error("Email is already in use");
+        toast.error("Este e-mail já está em uso");
         return;
       }
 
       // Trata erros genéricos
-      toast.error("Failed to create account. Please try again later.");
+      toast.error("Falha ao criar a conta. Tente novamente mais tarde.");
     } catch (error) {
       // Trata erros de rede ou falhas inesperadas
       console.error("Registration error:", error);
-      toast.error("An unexpected error occurred. Please try again.");
+      toast.error("Ocorreu um erro inesperado. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
@@ -128,21 +128,21 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
-            Create Account
+            Criar conta
           </CardTitle>
           <CardDescription>
-            Enter your details below to create your UX Auditor account
+            Informe seus dados para criar sua conta no UX Auditor
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* Campo Nome */}
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">Nome completo</Label>
               <Input
                 id="name"
                 type="text"
-                placeholder="John Doe"
+                placeholder="João Silva"
                 {...register("name")}
                 disabled={isLoading}
                 aria-invalid={!!errors.name}
@@ -162,11 +162,11 @@ export default function RegisterPage() {
 
             {/* Campo E-mail */}
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+              <Label htmlFor="email">Endereço de e-mail</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="name@example.com"
+                placeholder="nome@exemplo.com"
                 {...register("email")}
                 disabled={isLoading}
                 aria-invalid={!!errors.email}
@@ -186,11 +186,11 @@ export default function RegisterPage() {
 
             {/* Campo Senha */}
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="At least 8 characters"
+                placeholder="Pelo menos 8 caracteres"
                 {...register("password")}
                 disabled={isLoading}
                 aria-invalid={!!errors.password}
@@ -217,10 +217,10 @@ export default function RegisterPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
+                  Criando conta...
                 </>
               ) : (
-                "Create account"
+                "Criar conta"
               )}
             </Button>
 
@@ -231,8 +231,8 @@ export default function RegisterPage() {
                 asChild
                 className="text-muted-foreground hover:text-foreground"
               >
-                <Link href="/auth/signin">
-                  Already have an account? Sign in
+                  <Link href="/auth/signin">
+                  Já tem uma conta? Entrar
                 </Link>
               </Button>
             </div>
