@@ -9,7 +9,7 @@ O propósito deste módulo é fornecer uma interface interativa que permite aos 
 3.  Visualizar métricas psicométricas e anomalias sincronizadas temporalmente com a reprodução do vídeo.
 
 ## Arquitetura e Lógica
-O sistema utiliza uma arquitetura **Client-Server** baseada no framework Next.js 15, implementando o padrão **BFF (Backend for Frontend)** através de API Routes para mascarar a comunicação com os serviços de inferência e gerenciar autenticação.
+O sistema utiliza uma arquitetura **Client-Server** baseada no framework Next.js 16, implementando o padrão **BFF (Backend for Frontend)** através de API Routes para mascarar a comunicação com os serviços de inferência e gerenciar autenticação.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables':
@@ -26,14 +26,21 @@ graph TD
 ### Fluxo de Dados (Macro)
 1.  **Input:** Arquivo JSON contendo eventos brutos do `rrweb` (DOM snapshots e mutações).
 2.  **Processamento (Proxy):** O BFF (`app/api/`) recebe os dados, anexa credenciais de segurança e encaminha para o cluster de inferência (Python/FastAPI).
-3.  **Output:** O sistema recebe um objeto estruturado `SessionProcessResponse` contendo:
-    *   `insights`: Lista de anomalias com timestamp.
-    *   `psychometrics`: Scores de frustração, confusão e engajamento.
-    *   `narrative`: Resumo em linguagem natural gerado por LLM.
+3.  **Output:** O sistema recebe um objeto `SessionProcessResponse` que pode vir parcial:
+    *   `insights`: lista de anomalias com timestamp, ou `null`/ausente.
+    *   `psychometrics`: scores de frustração, confusão e engajamento, com campos opcionais.
+    *   `intent_analysis`: intenção principal, intenções secundárias e barreiras, com campos opcionais.
+    *   `narrative`: resumo em linguagem natural gerado por LLM, ou `null`/ausente.
 4.  **Renderização:** Os componentes React hidratam a interface, sincronizando o player de vídeo com os gráficos de telemetria.
 
+O frontend normaliza esse payload antes de renderizar. Isso evita crashes quando a API retorna apenas parte dos dados ou usa formatos inesperados.
+
 ## Fundamentação Matemática
-Embora o cálculo das features ocorra no backend, o frontend implementa lógica de normalização para exibição.
+Embora o cálculo das features ocorra no backend, o frontend implementa lógica explícita de normalização para exibição:
+* arrays ausentes viram coleções vazias;
+* strings ausentes viram fallback textual;
+* números ausentes viram `0` quando fazem sentido visual;
+* objetos parcialmente preenchidos são convertidos em estruturas seguras antes de chegarem aos componentes.
 
 $$
 Score_{normalized} = \frac{Score_{raw}}{10}

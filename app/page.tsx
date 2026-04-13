@@ -8,7 +8,19 @@ import { FileUploader } from '@/components/FileUploader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, FileJson, Sparkles, AlertCircle } from 'lucide-react';
-import { InsightEvent, TelemetryLog, SessionProcessResponse, PsychometricData, IntentAnalysis, RrwebSessionEvent } from '@/types/dashboard';
+import {
+  BoundingBox,
+  InsightEvent,
+  InsightEventPayload,
+  InsightSeverity,
+  InsightType,
+  TelemetryLog,
+  TelemetryLogPayload,
+  SessionProcessResponse,
+  PsychometricData,
+  IntentAnalysis,
+  RrwebSessionEvent,
+} from '@/types/dashboard';
 
 /**
  * Página principal do Dashboard UX Auditor
@@ -46,6 +58,96 @@ export default function DashboardPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   // Mensagem de erro caso a análise falhe
   const [errorMessage, setErrorMessage] = useState<string>("");
+
+  function safeNumber(value: unknown, fallback = 0): number {
+    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  }
+
+  function safeString(value: unknown, fallback = ""): string {
+    return typeof value === "string" ? value : fallback;
+  }
+
+  function safeStringArray(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+  }
+
+  function normalizeText(value: unknown, fallback: string): string {
+    const text = safeString(value, "").trim();
+    return text.length > 0 ? text : fallback;
+  }
+
+  function normalizeBoundingBox(value: unknown): BoundingBox | undefined {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+
+    const box = value as Record<string, unknown>;
+    return {
+      top: safeNumber(box.top, 0),
+      left: safeNumber(box.left, 0),
+      width: safeNumber(box.width, 0),
+      height: safeNumber(box.height, 0),
+    };
+  }
+
+  function normalizeInsightEvent(value: InsightEventPayload | unknown, index: number): InsightEvent {
+    const insight = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    const type = safeString(insight.type, "usability");
+    const severity = safeString(insight.severity, "medium");
+
+    return {
+      id: safeString(insight.id, `insight-${index}`),
+      timestamp: safeNumber(insight.timestamp, 0),
+      type: (type === "accessibility" || type === "usability" || type === "heuristic" ? type : "usability") as InsightType,
+      severity: (severity === "low" || severity === "medium" || severity === "critical" ? severity : "medium") as InsightSeverity,
+      message: normalizeText(insight.message, "Detalhe do insight indisponível."),
+      boundingBox: normalizeBoundingBox(insight.boundingBox),
+    };
+  }
+
+  function normalizeTelemetryLog(value: TelemetryLogPayload | unknown, index: number): TelemetryLog {
+    const log = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+
+    return {
+      id: safeString(log.id, `log-${index}`),
+      timestamp: safeNumber(log.timestamp, 0),
+      eventType: normalizeText(log.eventType, "unknown"),
+      details: normalizeText(log.details, "Detalhes indisponíveis."),
+    };
+  }
+
+  function normalizePsychometrics(value: SessionProcessResponse["psychometrics"]): PsychometricData | null {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+
+    return {
+      engagement_score: safeNumber(value.engagement_score, 0),
+      frustration_score: safeNumber(value.frustration_score, 0),
+      confusion_score: safeNumber(value.confusion_score, 0),
+      behavior_patterns: safeStringArray(value.behavior_patterns),
+    };
+  }
+
+  function normalizeIntentAnalysis(value: SessionProcessResponse["intent_analysis"]): IntentAnalysis | null {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+
+    return {
+      primary_intent: normalizeText(value.primary_intent, "Não identificado"),
+      secondary_intents: safeStringArray(value.secondary_intents),
+      success_probability: safeNumber(value.success_probability, 0),
+      barriers: safeStringArray(value.barriers),
+    };
+  }
+
+  function normalizeTelemetryLogs(value: SessionProcessResponse["stats"]): TelemetryLog[] {
+    const actions = value?.user_actions;
+    return Array.isArray(actions) ? actions.map((action, index) => normalizeTelemetryLog(action, index)) : [];
+  }
 
   /**
    * Callback executado quando o arquivo é carregado com sucesso
@@ -135,29 +237,22 @@ export default function DashboardPage() {
       // Isso garante que os painéis laterais reflitam os dados processados
       
       // Atualiza os insights detectados pelo pipeline
-      if (data.insights && Array.isArray(data.insights)) {
-        setInsights(data.insights);
-      }
+      const safeInsights = Array.isArray(data.insights)
+        ? data.insights.map((insight, index) => normalizeInsightEvent(insight, index))
+        : [];
+      setInsights(safeInsights);
 
       // Atualiza a narrativa gerada pela IA
-      if (data.narrative) {
-        setNarrative(data.narrative);
-      }
+      setNarrative(normalizeText(data.narrative, ""));
 
       // Atualiza os dados psicométricos extraídos
-      if (data.psychometrics) {
-        setPsychometrics(data.psychometrics);
-      }
+      setPsychometrics(normalizePsychometrics(data.psychometrics));
 
       // Atualiza a análise de intenção do usuário
-      if (data.intent_analysis) {
-        setIntentAnalysis(data.intent_analysis);
-      }
+      setIntentAnalysis(normalizeIntentAnalysis(data.intent_analysis));
 
       // Mapeia as ações do usuário para o estado de logs do TelemetryPanel
-      if (data.stats?.user_actions && Array.isArray(data.stats.user_actions)) {
-        setLogs(data.stats.user_actions);
-      }
+      setLogs(normalizeTelemetryLogs(data.stats));
 
     } catch (error) {
       // Tratamento de erros robusto

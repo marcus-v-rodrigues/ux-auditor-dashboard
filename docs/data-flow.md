@@ -74,12 +74,19 @@ O pipeline de análise executado no backend segue as seguintes etapas:
 
 ```typescript
 interface SessionProcessResponse {
-  insights: InsightEvent[];
-  narrative: string;
-  psychometrics: PsychometricData;
-  intent_analysis: IntentAnalysis;
+  insights?: InsightEvent[] | null;
+  narrative?: string | null;
+  psychometrics?: PsychometricData | null;
+  intent_analysis?: IntentAnalysis | null;
 }
 ```
+
+O frontend trata essa resposta como parcial por padrão. A normalização acontece antes da renderização:
+
+* arrays ausentes viram `[]`
+* strings ausentes ou vazias viram `""` ou um fallback legível
+* números inválidos viram `0`
+* objetos parcialmente preenchidos não quebram os componentes
 
 ### Diagrama do Fluxo de Dados
 
@@ -167,6 +174,8 @@ graph TD
 | `confusion_score` | number (0-100) | Barra de progresso amarela |
 | `behavior_patterns` | string[] | Lista de badges azuis |
 
+Se o backend retornar apenas parte de `psychometrics`, o painel completa com valores seguros antes de montar a UI.
+
 Também é usado no [`SemanticSummary`](../components/player/SemanticSummary.tsx) para exibir:
 
 | Campo Convertido | Origem | Escala |
@@ -199,6 +208,8 @@ graph TD
 | `secondary_intents` | string[] | Badges verdes |
 | `success_probability` | number (0-100) | Barra de progresso verde |
 | `barriers` | string[] | Lista com ícones de alerta amarelo |
+
+Se o payload vier parcial, o painel usa arrays vazios e textos de fallback para evitar crashes de renderização.
 
 ## Componentes Envolvidos
 

@@ -1,7 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { InsightEvent, PsychometricData, IntentAnalysis } from "@/types/dashboard";
+import { InsightEvent, InsightSeverity, InsightType, PsychometricData, IntentAnalysis } from "@/types/dashboard";
 import { Eye, AlertTriangle, CheckCircle2, Brain, Target, BarChart3 } from "lucide-react";
 import { SemanticSummary } from "./SemanticSummary";
 import { SemanticDiagnostics } from "./SemanticDiagnostics";
@@ -15,11 +15,97 @@ import { SemanticDiagnostics } from "./SemanticDiagnostics";
  * @property narrative - Texto narrativo gerado pela IA sobre a sessão (opcional)
  */
 interface Props {
-  insights: InsightEvent[];
+  insights?: InsightEvent[] | null;
   currentTime: number;
   psychometrics?: PsychometricData | null;
   intentAnalysis?: IntentAnalysis | null;
   narrative?: string | null;
+}
+
+interface SafePsychometrics {
+  engagement_score: number;
+  frustration_score: number;
+  confusion_score: number;
+  behavior_patterns: string[];
+}
+
+interface SafeIntentAnalysis {
+  primary_intent: string;
+  secondary_intents: string[];
+  success_probability: number;
+  barriers: string[];
+}
+
+interface SafeInsightEvent {
+  id: string;
+  timestamp: number;
+  type: InsightType;
+  severity: InsightSeverity;
+  message: string;
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function safePercent(value: unknown): number {
+  const numeric = safeNumber(value, 0);
+  return Math.min(100, Math.max(0, numeric));
+}
+
+function safeString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function safeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function normalizeText(value: unknown, fallback: string): string {
+  const text = safeString(value, "").trim();
+  return text.length > 0 ? text : fallback;
+}
+
+function normalizePrimaryIntent(value: unknown): string {
+  return normalizeText(value, "Não identificado");
+}
+
+function normalizeMessage(value: unknown): string {
+  return normalizeText(value, "Detalhe do insight indisponível.");
+}
+
+function normalizePsychometrics(value: PsychometricData | null | undefined): SafePsychometrics {
+  return {
+    engagement_score: safePercent(value?.engagement_score),
+    frustration_score: safePercent(value?.frustration_score),
+    confusion_score: safePercent(value?.confusion_score),
+    behavior_patterns: safeStringArray(value?.behavior_patterns),
+  };
+}
+
+function normalizeIntentAnalysis(value: IntentAnalysis | null | undefined): SafeIntentAnalysis {
+  return {
+    primary_intent: normalizePrimaryIntent(value?.primary_intent),
+    secondary_intents: safeStringArray(value?.secondary_intents),
+    success_probability: safePercent(value?.success_probability),
+    barriers: safeStringArray(value?.barriers),
+  };
+}
+
+function normalizeInsightEvent(value: unknown, index: number): SafeInsightEvent {
+  const insight = value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
+  const type = safeString(insight.type, "usability");
+  const severity = safeString(insight.severity, "medium");
+
+  return {
+    id: safeString(insight.id, `insight-${index}`),
+    timestamp: safeNumber(insight.timestamp, 0),
+    type: type === "accessibility" || type === "usability" || type === "heuristic" ? type : "usability",
+    severity: severity === "low" || severity === "medium" || severity === "critical" ? severity : "medium",
+    message: normalizeMessage(insight.message),
+  };
 }
 
 /**
@@ -41,15 +127,33 @@ interface Props {
  * @param narrative - Texto narrativo gerado pela IA sobre a sessão (opcional)
  */
 export function InsightsPanel({ insights, currentTime, psychometrics, intentAnalysis, narrative }: Props) {
+  const safeCurrentTime = safeNumber(currentTime, 0);
+  const safePsychometrics = normalizePsychometrics(psychometrics);
+  const safeIntentAnalysis = normalizeIntentAnalysis(intentAnalysis);
+  const safeNarrative = safeString(narrative, "");
+  const hasNarrative = safeNarrative.trim().length > 0;
+  const safeInsights = Array.isArray(insights)
+    ? insights.map((insight, index) => normalizeInsightEvent(insight, index))
+    : [];
+
   /**
    * Filtra insights ativos baseando-se no tempo atual de reprodução.
    * Considera um insight como "ativo" se estiver dentro de uma janela
    * de ±1.5 segundos do tempo atual, proporcionando uma experiência
    * visual mais fluida e contextual.
    */
-  const activeInsights = insights.filter(
-    (i) => Math.abs(i.timestamp - currentTime) < 1500
+  const activeInsights = safeInsights.filter(
+    (i) => Math.abs(i.timestamp - safeCurrentTime) < 1500
   );
+
+  const hasBehaviorPatterns = safePsychometrics.behavior_patterns.length > 0;
+  const hasSecondaryIntents = safeIntentAnalysis.secondary_intents.length > 0;
+  const hasBarriers = safeIntentAnalysis.barriers.length > 0;
+  const hasActiveInsights = activeInsights.length > 0;
+  const summaryPsychometrics = {
+    frustration_score: safePsychometrics.frustration_score / 10,
+    cognitive_load_score: safePsychometrics.confusion_score / 10,
+  };
 
   return (
     <div className="flex flex-col h-full bg-card border-l border-border">
@@ -64,12 +168,22 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
       {/* Área de scroll com lista de insights e dados processados */}
       <ScrollArea className="flex-1 p-4">
         {/* Diagnóstico Semântico Executivo - Resumo da IA no topo do painel */}
-        {narrative && psychometrics && intentAnalysis && (
+        {hasNarrative && (psychometrics || intentAnalysis) && (
           <div className="mb-4">
             <SemanticDiagnostics
-              narrative={narrative}
-              psychometrics={psychometrics}
-              intent_analysis={intentAnalysis}
+              narrative={safeNarrative}
+              psychometrics={{
+                engagement_score: safePsychometrics.engagement_score,
+                frustration_score: safePsychometrics.frustration_score,
+                confusion_score: safePsychometrics.confusion_score,
+                behavior_patterns: safePsychometrics.behavior_patterns,
+              }}
+              intent_analysis={{
+                primary_intent: safeIntentAnalysis.primary_intent,
+                secondary_intents: safeIntentAnalysis.secondary_intents,
+                success_probability: safeIntentAnalysis.success_probability,
+                barriers: safeIntentAnalysis.barriers,
+              }}
             />
           </div>
         )}
@@ -86,12 +200,12 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
               <div>
                 <div className="flex justify-between text-[10px] mb-1">
                   <span className="text-muted-foreground">Engajamento</span>
-                  <span className="text-green-400">{psychometrics.engagement_score}%</span>
+                  <span className="text-green-400">{safePsychometrics.engagement_score}%</span>
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-green-500 rounded-full transition-all"
-                    style={{ width: `${psychometrics.engagement_score}%` }}
+                    style={{ width: `${safePsychometrics.engagement_score}%` }}
                   />
                 </div>
               </div>
@@ -99,12 +213,12 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
               <div>
                 <div className="flex justify-between text-[10px] mb-1">
                   <span className="text-muted-foreground">Frustração</span>
-                  <span className="text-red-400">{psychometrics.frustration_score}%</span>
+                  <span className="text-red-400">{safePsychometrics.frustration_score}%</span>
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-red-500 rounded-full transition-all"
-                    style={{ width: `${psychometrics.frustration_score}%` }}
+                    style={{ width: `${safePsychometrics.frustration_score}%` }}
                   />
                 </div>
               </div>
@@ -112,28 +226,32 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
               <div>
                 <div className="flex justify-between text-[10px] mb-1">
                   <span className="text-muted-foreground">Confusão</span>
-                  <span className="text-yellow-400">{psychometrics.confusion_score}%</span>
+                  <span className="text-yellow-400">{safePsychometrics.confusion_score}%</span>
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-yellow-500 rounded-full transition-all"
-                    style={{ width: `${psychometrics.confusion_score}%` }}
+                    style={{ width: `${safePsychometrics.confusion_score}%` }}
                   />
                 </div>
               </div>
-              {/* Padrões de comportamento */}
-              {psychometrics.behavior_patterns.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-blue-500/20">
-                  <p className="text-[10px] text-muted-foreground mb-1">Padrões:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {psychometrics.behavior_patterns.map((pattern, idx) => (
-                      <Badge key={idx} variant="outline" className="text-[9px] h-4 bg-blue-500/10 border-blue-500/30 text-blue-300">
-                        {pattern}
-                      </Badge>
-                    ))}
+                {/* Padrões de comportamento */}
+                {hasBehaviorPatterns && (
+                  <div className="mt-2 pt-2 border-t border-blue-500/20">
+                    <p className="text-[10px] text-muted-foreground mb-1">Padrões:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {safePsychometrics.behavior_patterns.map((pattern, idx) => (
+                        <Badge
+                          key={idx}
+                          variant="outline"
+                          className="text-[9px] h-4 bg-blue-500/10 border-blue-500/30 text-blue-300"
+                        >
+                          {pattern}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           </div>
         )}
@@ -148,14 +266,14 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
             {/* Intenção principal */}
             <div className="mb-2">
               <p className="text-[10px] text-muted-foreground mb-1">Intenção Principal:</p>
-              <p className="text-xs text-foreground font-medium">{intentAnalysis.primary_intent}</p>
+              <p className="text-xs text-foreground font-medium">{safeIntentAnalysis.primary_intent}</p>
             </div>
             {/* Intenções secundárias */}
-            {intentAnalysis.secondary_intents.length > 0 && (
+            {hasSecondaryIntents && (
               <div className="mb-2">
                 <p className="text-[10px] text-muted-foreground mb-1">Intenções Secundárias:</p>
                 <div className="flex flex-wrap gap-1">
-                  {intentAnalysis.secondary_intents.map((intent, idx) => (
+                  {safeIntentAnalysis.secondary_intents.map((intent, idx) => (
                     <Badge key={idx} variant="outline" className="text-[9px] h-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
                       {intent}
                     </Badge>
@@ -167,21 +285,21 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
             <div className="mb-2">
               <div className="flex justify-between text-[10px] mb-1">
                 <span className="text-muted-foreground">Prob. de Sucesso</span>
-                <span className="text-emerald-400">{intentAnalysis.success_probability}%</span>
+                <span className="text-emerald-400">{safeIntentAnalysis.success_probability}%</span>
               </div>
               <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${intentAnalysis.success_probability}%` }}
+                  style={{ width: `${safeIntentAnalysis.success_probability}%` }}
                 />
               </div>
             </div>
             {/* Barreiras identificadas */}
-            {intentAnalysis.barriers.length > 0 && (
+            {hasBarriers && (
               <div className="mt-2 pt-2 border-t border-emerald-500/20">
                 <p className="text-[10px] text-muted-foreground mb-1">Barreiras:</p>
                 <ul className="text-[10px] text-red-300 space-y-1">
-                  {intentAnalysis.barriers.map((barrier, idx) => (
+                  {safeIntentAnalysis.barriers.map((barrier, idx) => (
                     <li key={idx} className="flex items-start gap-1">
                       <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
                       {barrier}
@@ -202,7 +320,7 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
         </div>
         
         {/* Estado vazio: nenhum insight ativo no momento */}
-        {activeInsights.length === 0 ? (
+        {!hasActiveInsights ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground space-y-2">
             <CheckCircle2 className="w-8 h-8 opacity-20" />
             <p className="text-xs">No anomalies at the moment.</p>
@@ -244,14 +362,11 @@ export function InsightsPanel({ insights, currentTime, psychometrics, intentAnal
         )}
 
         {/* Seção de Resumo Semântico - Exibida na parte inferior quando narrativa está disponível */}
-        {narrative && psychometrics && (
+        {hasNarrative && psychometrics && (
           <div className="mt-6 pt-4 border-t border-border">
             <SemanticSummary
-              narrative={narrative}
-              psychometrics={{
-                frustration_score: psychometrics.frustration_score / 10, // Converte de 0-100 para 0-10
-                cognitive_load_score: psychometrics.confusion_score / 10, // Usa confusion como proxy para carga cognitiva
-              }}
+              narrative={safeNarrative}
+              psychometrics={summaryPsychometrics}
             />
           </div>
         )}

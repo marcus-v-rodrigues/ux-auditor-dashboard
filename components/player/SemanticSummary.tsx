@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { FileText, Brain } from "lucide-react";
 
 /**
@@ -20,8 +19,28 @@ interface PsychometricsSummary {
  * @property psychometrics - Objeto contendo os scores psicométricos
  */
 interface SemanticSummaryProps {
-  narrative: string;
-  psychometrics: PsychometricsSummary;
+  narrative?: string | null;
+  psychometrics?: PsychometricsSummary | null;
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function safeString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function normalizeText(value: unknown, fallback: string): string {
+  const text = safeString(value, "").trim();
+  return text.length > 0 ? text : fallback;
+}
+
+function normalizePsychometrics(value: PsychometricsSummary | null | undefined): PsychometricsSummary {
+  return {
+    frustration_score: safeNumber(value?.frustration_score, 0),
+    cognitive_load_score: safeNumber(value?.cognitive_load_score, 0),
+  };
 }
 
 /**
@@ -100,9 +119,12 @@ function getScoreLabel(score: number): string {
  * @param psychometrics - Dados psicométricos com scores de frustração e carga cognitiva
  */
 export function SemanticSummary({ narrative, psychometrics }: SemanticSummaryProps) {
+  const safeNarrative = normalizeText(narrative, "Sem resumo disponível.");
+  const safePsychometrics = normalizePsychometrics(psychometrics);
+
   // Calcula valores percentuais para as barras de progresso (escala 0-10 para 0-100%)
-  const frustrationPercent = (psychometrics.frustration_score / 10) * 100;
-  const cognitiveLoadPercent = (psychometrics.cognitive_load_score / 10) * 100;
+  const frustrationPercent = (safePsychometrics.frustration_score / 10) * 100;
+  const cognitiveLoadPercent = (safePsychometrics.cognitive_load_score / 10) * 100;
 
   return (
     <Card className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 border-slate-700/50">
@@ -118,7 +140,7 @@ export function SemanticSummary({ narrative, psychometrics }: SemanticSummaryPro
         {/* Seção de narrativa - exibida em itálico como resumo da sessão */}
         <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/30">
           <p className="text-sm text-slate-200 italic leading-relaxed">
-            &ldquo;{narrative}&rdquo;
+            &ldquo;{safeNarrative}&rdquo;
           </p>
         </div>
 
@@ -136,19 +158,19 @@ export function SemanticSummary({ narrative, psychometrics }: SemanticSummaryPro
               <div className="flex items-center gap-2">
                 <Badge 
                   variant="outline" 
-                  className={`text-[10px] h-5 ${getTextColor(psychometrics.frustration_score)} border-current/30`}
+                  className={`text-[10px] h-5 ${getTextColor(safePsychometrics.frustration_score)} border-current/30`}
                 >
-                  {getScoreLabel(psychometrics.frustration_score)}
+                  {getScoreLabel(safePsychometrics.frustration_score)}
                 </Badge>
-                <span className={`text-xs font-mono ${getTextColor(psychometrics.frustration_score)}`}>
-                  {psychometrics.frustration_score.toFixed(1)}/10
+                <span className={`text-xs font-mono ${getTextColor(safePsychometrics.frustration_score)}`}>
+                  {safePsychometrics.frustration_score.toFixed(1)}/10
                 </span>
               </div>
             </div>
             {/* Container da barra com indicador de cor dinâmica */}
             <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
               <div
-                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(psychometrics.frustration_score)}`}
+                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(safePsychometrics.frustration_score)}`}
                 style={{ width: `${frustrationPercent}%` }}
               />
             </div>
@@ -161,19 +183,19 @@ export function SemanticSummary({ narrative, psychometrics }: SemanticSummaryPro
               <div className="flex items-center gap-2">
                 <Badge 
                   variant="outline" 
-                  className={`text-[10px] h-5 ${getTextColor(psychometrics.cognitive_load_score)} border-current/30`}
+                  className={`text-[10px] h-5 ${getTextColor(safePsychometrics.cognitive_load_score)} border-current/30`}
                 >
-                  {getScoreLabel(psychometrics.cognitive_load_score)}
+                  {getScoreLabel(safePsychometrics.cognitive_load_score)}
                 </Badge>
-                <span className={`text-xs font-mono ${getTextColor(psychometrics.cognitive_load_score)}`}>
-                  {psychometrics.cognitive_load_score.toFixed(1)}/10
+                <span className={`text-xs font-mono ${getTextColor(safePsychometrics.cognitive_load_score)}`}>
+                  {safePsychometrics.cognitive_load_score.toFixed(1)}/10
                 </span>
               </div>
             </div>
             {/* Container da barra com indicador de cor dinâmica */}
             <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
               <div
-                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(psychometrics.cognitive_load_score)}`}
+                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(safePsychometrics.cognitive_load_score)}`}
                 style={{ width: `${cognitiveLoadPercent}%` }}
               />
             </div>

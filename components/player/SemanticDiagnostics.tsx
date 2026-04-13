@@ -18,9 +18,63 @@ type JourneyStatus = 'progressing' | 'looping' | 'erratic';
  * @property intent_analysis - Análise de intenção do usuário
  */
 interface SemanticDiagnosticsProps {
-  narrative: string;
-  psychometrics: PsychometricData;
-  intent_analysis: IntentAnalysis;
+  narrative?: string | null;
+  psychometrics?: PsychometricData | null;
+  intent_analysis?: IntentAnalysis | null;
+}
+
+interface SafePsychometrics {
+  engagement_score: number;
+  frustration_score: number;
+  confusion_score: number;
+  behavior_patterns: string[];
+}
+
+interface SafeIntentAnalysis {
+  primary_intent: string;
+  success_probability: number;
+  barriers: string[];
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function safePercent(value: unknown): number {
+  const numeric = safeNumber(value, 0);
+  return Math.min(100, Math.max(0, numeric));
+}
+
+function safeString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function safeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function normalizeText(value: unknown, fallback: string): string {
+  const text = safeString(value, "").trim();
+  return text.length > 0 ? text : fallback;
+}
+
+function normalizePsychometrics(value: PsychometricData | null | undefined): SafePsychometrics {
+  return {
+    engagement_score: safePercent(value?.engagement_score),
+    frustration_score: safePercent(value?.frustration_score),
+    confusion_score: safePercent(value?.confusion_score),
+    behavior_patterns: safeStringArray(value?.behavior_patterns),
+  };
+}
+
+function normalizeIntentAnalysis(value: IntentAnalysis | null | undefined): SafeIntentAnalysis {
+  return {
+    primary_intent: normalizeText(value?.primary_intent, "Não identificado"),
+    success_probability: safePercent(value?.success_probability),
+    barriers: safeStringArray(value?.barriers),
+  };
 }
 
 /**
@@ -165,13 +219,32 @@ export function SemanticDiagnostics({
   psychometrics, 
   intent_analysis 
 }: SemanticDiagnosticsProps) {
+  const safeNarrative = normalizeText(narrative, "Sem narrativa disponível.");
+  const safePsychometrics = normalizePsychometrics(psychometrics);
+  const safeIntentAnalysis = normalizeIntentAnalysis(intent_analysis);
+  const hasPrimaryIntent = safeIntentAnalysis.primary_intent !== "Não identificado";
+  const hasBarriers = safeIntentAnalysis.barriers.length > 0;
+
   // Determina o status da jornada baseado nos dados
-  const journeyStatus = determineJourneyStatus(psychometrics, intent_analysis);
+  const journeyStatus = determineJourneyStatus(
+    {
+      engagement_score: safePsychometrics.engagement_score,
+      frustration_score: safePsychometrics.frustration_score,
+      confusion_score: safePsychometrics.confusion_score,
+      behavior_patterns: safePsychometrics.behavior_patterns,
+    },
+    {
+      primary_intent: safeIntentAnalysis.primary_intent,
+      secondary_intents: [],
+      success_probability: safeIntentAnalysis.success_probability,
+      barriers: safeIntentAnalysis.barriers,
+    }
+  );
   const statusConfig = getJourneyStatusConfig(journeyStatus);
   
   // Converte scores de 0-100 para escala 0-10
-  const frustrationScore = psychometrics.frustration_score / 10;
-  const cognitiveLoadScore = psychometrics.confusion_score / 10; // Usa confusion como proxy para carga cognitiva
+  const frustrationScore = safePsychometrics.frustration_score / 10;
+  const cognitiveLoadScore = safePsychometrics.confusion_score / 10; // Usa confusion como proxy para carga cognitiva
   
   // Calcula valores percentuais para as barras de progresso
   const frustrationPercent = frustrationScore * 10;
@@ -209,7 +282,7 @@ export function SemanticDiagnostics({
             <div className="flex items-start gap-2">
               <Quote className="w-4 h-4 text-purple-400/60 shrink-0 mt-0.5" />
               <p className="text-sm text-slate-200 italic leading-relaxed">
-                {narrative}
+                {safeNarrative}
               </p>
             </div>
           </blockquote>
@@ -274,23 +347,25 @@ export function SemanticDiagnostics({
         </div>
 
         {/* Indicador adicional: intenção principal */}
-        <div className="pt-2 border-t border-slate-700/30">
+        {(hasPrimaryIntent || hasBarriers) && (
+          <div className="pt-2 border-t border-slate-700/30">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider">Intenção Principal</span>
             <span className="text-xs text-slate-300 font-medium">
-              {intent_analysis.primary_intent}
+              {safeIntentAnalysis.primary_intent}
             </span>
           </div>
           <div className="flex items-center justify-between mt-1">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider">Prob. de Sucesso</span>
             <span className={`text-xs font-mono ${
-              intent_analysis.success_probability > 70 ? 'text-green-400' :
-              intent_analysis.success_probability > 40 ? 'text-yellow-400' : 'text-red-400'
+              safeIntentAnalysis.success_probability > 70 ? 'text-green-400' :
+              safeIntentAnalysis.success_probability > 40 ? 'text-yellow-400' : 'text-red-400'
             }`}>
-              {intent_analysis.success_probability}%
+              {safeIntentAnalysis.success_probability}%
             </span>
           </div>
         </div>
+        )}
       </CardContent>
     </Card>
   );
