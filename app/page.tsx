@@ -1,365 +1,595 @@
 'use client';
 
-import { useState } from 'react';
-import { TelemetryPanel } from '@/components/player/TelemetryPanel';
-import { InsightsPanel } from '@/components/player/InsightsPanel';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, ArrowLeft, FileJson, RefreshCw, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import VideoPlayer from '@/components/player/VideoPlayer';
 import { FileUploader } from '@/components/FileUploader';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, FileJson, Sparkles, AlertCircle } from 'lucide-react';
-import {
+import { InsightsPanel } from '@/components/player/InsightsPanel';
+import type {
   InsightEvent,
-  TelemetryLog,
-  SessionProcessResponse,
-  PsychometricData,
-  IntentAnalysis,
+  ProcessingStatus,
   RrwebSessionEvent,
+  SessionJobSubmissionResponse,
+  SessionProcessResponse,
 } from '@/types/dashboard';
-import {
-  normalizeInsightEvent,
-  normalizeIntentAnalysisData,
-  normalizePsychometricData,
-  normalizeTelemetryLogs,
-  normalizeText,
-} from '@/lib/normalization';
+import { normalizeSessionJobStatus, safeNumber } from '@/lib/normalization';
 
-/**
- * Página principal do Dashboard UX Auditor
- * 
- * Gerencia o fluxo completo de análise de sessões:
- * 1. Upload de arquivo de sessão rrweb
- * 2. Reprodução da gravação
- * 3. Disparo de análise de IA
- * 4. Exibição de insights e diagnósticos
- */
+const POLLING_INTERVAL_MS = 2000;
+const POLLING_TIMEOUT_MS = 5 * 60 * 1000;
+
+type StatusDiagnostics = {
+  attempts: number;
+  pollingActive: boolean;
+  lastPollAt: number | null;
+  lastStatus: ProcessingStatus | null;
+  lastRawStatus: string | null;
+  lastHttpStatus: number | null;
+  lastError: string | null;
+};
+
+function statusLabel(status: ProcessingStatus, timedOut: boolean): string {
+  if (timedOut) {
+    return 'Timeout';
+  }
+
+  switch (status) {
+    case 'idle':
+      return 'Aguardando upload';
+    case 'uploading':
+      return 'Enviando';
+    case 'queued':
+      return 'Na fila';
+    case 'processing':
+      return 'Processando';
+    case 'completed':
+      return 'Concluída';
+    case 'failed':
+      return 'Falhou';
+  }
+}
+
+function statusClassName(status: ProcessingStatus, timedOut: boolean): string {
+  if (timedOut) {
+    return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
+  }
+
+  switch (status) {
+    case 'completed':
+      return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30';
+    case 'failed':
+      return 'bg-red-500/15 text-red-200 border-red-500/30';
+    case 'processing':
+    case 'uploading':
+      return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
+    case 'queued':
+      return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+    default:
+      return 'bg-slate-500/15 text-slate-300 border-slate-500/30';
+  }
+}
+
+function statusCopy(status: ProcessingStatus, timedOut: boolean, processingError: string | null): string {
+  if (timedOut) {
+    return 'Sessão ainda não saiu da fila no tempo esperado.';
+  }
+
+  switch (status) {
+    case 'idle':
+      return 'Aguardando upload.';
+    case 'uploading':
+      return 'Sessão em envio.';
+    case 'queued':
+      return 'Sessão recebida. Aguardando worker.';
+    case 'processing':
+      return 'Worker em execução. Processando sessão.';
+    case 'completed':
+      return 'Análise concluída.';
+    case 'failed':
+      return processingError ?? 'Falha no processamento.';
+  }
+}
+
+function formatTimestamp(value: number | null): string {
+  if (!value) {
+    return 'nenhum';
+  }
+
+  return new Date(value).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function normalizeStatusForDiagnostics(value: string | null): string {
+  return value && value.length > 0 ? value : '—';
+}
+
+function DiagnosticsPanel({ data }: { data: StatusDiagnostics }) {
+  return (
+    <Card className="border-cyan-400/15 bg-cyan-400/5 shadow-lg shadow-slate-950/20">
+      <CardHeader className="border-b border-white/10 pb-3">
+        <CardTitle className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200">
+          Diagnóstico de polling
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Ativo</p>
+          <p className="mt-1 text-sm text-white">{data.pollingActive ? 'sim' : 'não'}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Tentativas</p>
+          <p className="mt-1 text-sm text-white">{data.attempts}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Último polling</p>
+          <p className="mt-1 text-sm text-white">{formatTimestamp(data.lastPollAt)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">HTTP</p>
+          <p className="mt-1 text-sm text-white">{data.lastHttpStatus ?? '—'}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Status</p>
+          <p className="mt-1 text-sm text-white">{normalizeStatusForDiagnostics(data.lastStatus)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Raw</p>
+          <p className="mt-1 text-sm text-white">{normalizeStatusForDiagnostics(data.lastRawStatus)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 sm:col-span-2 xl:col-span-2">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Erro</p>
+          <p className="mt-1 text-sm text-white">{data.lastError ?? '—'}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
-  // Estado do tempo atual de reprodução em milissegundos
+  const [uploadedEvents, setUploadedEvents] = useState<RrwebSessionEvent[]>([]);
+  const [sessionUuid, setSessionUuid] = useState('');
+  const [sessionUserId, setSessionUserId] = useState('');
+  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('idle');
+  const [processingError, setProcessingError] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<SessionProcessResponse | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
-  // Estado dos eventos rrweb carregados do arquivo
-  const [events, setEvents] = useState<RrwebSessionEvent[]>([]);
-  // Nome do arquivo/sessão exibido no header
-  const [fileName, setFileName] = useState<string>("");
-  // UUID da sessão retornado após upload bem-sucedido
-  const [sessionUuid, setSessionUuid] = useState<string>("");
+  const [submissionMessage, setSubmissionMessage] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pollingTimedOut, setPollingTimedOut] = useState(false);
+  const [statusDiagnostics, setStatusDiagnostics] = useState<StatusDiagnostics>({
+    attempts: 0,
+    pollingActive: false,
+    lastPollAt: null,
+    lastStatus: null,
+    lastRawStatus: null,
+    lastHttpStatus: null,
+    lastError: null,
+  });
 
-  // Dados auxiliares (telemetria/insights)
-  const [logs, setLogs] = useState<TelemetryLog[]>([]);
-  const [insights, setInsights] = useState<InsightEvent[]>([]);
-  
-  // Estados para dados processados pela IA
-  // Narrativa gerada pela IA sobre a sessão
-  const [narrative, setNarrative] = useState<string>("");
-  // Dados psicométricos extraídos durante a análise
-  const [psychometrics, setPsychometrics] = useState<PsychometricData | null>(null);
-  // Análise de intenção do usuário
-  const [intentAnalysis, setIntentAnalysis] = useState<IntentAnalysis | null>(null);
+  const sessionGenerationRef = useRef(0);
+  const isPollingRequestRef = useRef(false);
 
-  // Estados de controle da análise de IA
-  // Indica se o pipeline de análise está em execução
-  const [isProcessing, setIsProcessing] = useState(false);
-  // Mensagem de erro caso a análise falhe
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const hasSession = sessionUuid.length > 0;
+  const shouldPoll = hasSession && !pollingTimedOut && (processingStatus === 'queued' || processingStatus === 'processing');
 
-  /**
-   * Callback executado quando o arquivo é carregado com sucesso
-   * Inicializa todos os estados necessários para a sessão
-   * 
-   * @param uploadedEvents - Array de eventos rrweb do arquivo
-   * @param uuid - Identificador único da sessão retornado pelo backend
-   */
-  const handleFileLoaded = (uploadedEvents: RrwebSessionEvent[], uuid: string) => {
-    setEvents(uploadedEvents);
-    setSessionUuid(uuid);
-    setFileName(`Sessão: ${uuid.slice(0, 8)}...`);
-    // Limpa estados de sessões anteriores
-    setLogs([]);
-    setInsights([]);
-    setNarrative("");
-    setPsychometrics(null);
-    setIntentAnalysis(null);
-    setErrorMessage("");
-  };
-
-  /**
-   * Reseta completamente a sessão atual
-   * Limpa todos os estados e volta para a tela de upload
-   */
-  const resetSession = () => {
-    setEvents([]);
-    setFileName("");
-    setSessionUuid("");
-    setCurrentTime(0);
-    setInsights([]);
-    setLogs([]);
-    setNarrative("");
-    setPsychometrics(null);
-    setIntentAnalysis(null);
-    setErrorMessage("");
-    setIsProcessing(false);
-  };
-
-  /**
-   * Dispara o pipeline de análise de IA no backend
-   * 
-   * Fluxo do pipeline no backend:
-   * 1. Preprocessor - Pré-processa os eventos rrweb
-   * 2. Isolation Forest - Detecta anomalias estatísticas
-   * 3. Heurísticas - Aplica regras de UX pré-definidas
-   * 4. LLM - Gera insights narrativos com IA (Hermes-405B)
-   * 
-   * Faz requisição para a API local que atua como proxy,
-   * mantendo a autenticação no servidor.
-   * 
-   * @throws Error se a sessão não estiver disponível ou a API falhar
-   */
-  const triggerAnalysis = async () => {
-    // Verifica se existe uma sessão válida antes de prosseguir
-    if (!sessionUuid) {
-      setErrorMessage("Nenhuma sessão ativa para analisar. Faça o upload de um arquivo primeiro.");
-      return;
+  const sessionDuration = useMemo(() => {
+    if (uploadedEvents.length === 0) {
+      return 0;
     }
 
-    // Limpa erros anteriores e inicia o estado de processamento
-    setErrorMessage("");
-    setIsProcessing(true);
+    const firstTimestamp = safeNumber(uploadedEvents[0]?.timestamp, 0);
+    const lastTimestamp = safeNumber(uploadedEvents[uploadedEvents.length - 1]?.timestamp, 0);
+    return Math.max(0, lastTimestamp - firstTimestamp);
+  }, [uploadedEvents]);
 
-    try {
-      // Monta o endpoint de processamento local (proxy para a API externa)
-      const endpoint = `/api/sessions/${sessionUuid}/process`;
+  const activeOverlays = useMemo<InsightEvent[]>(() => {
+    const insights = analysisResult?.insights ?? [];
+    if (insights.length === 0) {
+      return [];
+    }
 
-      // Faz a requisição para a API local
-      // A autenticação é gerenciada no servidor via sessão NextAuth
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}), // Corpo vazio
+    return insights.filter((insight) => Math.abs(insight.timestamp - currentTime) < 1000 && Boolean(insight.boundingBox));
+  }, [analysisResult, currentTime]);
+
+  const handleFileLoaded = useCallback(
+    (events: RrwebSessionEvent[], submission: SessionJobSubmissionResponse) => {
+      sessionGenerationRef.current += 1;
+      isPollingRequestRef.current = false;
+      setUploadedEvents(events);
+      setSessionUuid(submission.session_uuid);
+      setSessionUserId(submission.user_id);
+      setProcessingStatus(submission.status);
+      setProcessingError(null);
+      setAnalysisResult(null);
+      setCurrentTime(0);
+      setSubmissionMessage(submission.message);
+      setPollingTimedOut(false);
+      setStatusDiagnostics({
+        attempts: 0,
+        pollingActive: false,
+        lastPollAt: null,
+        lastStatus: submission.status,
+        lastRawStatus: submission.status,
+        lastHttpStatus: null,
+        lastError: null,
       });
+    },
+    []
+  );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Erro HTTP ${response.status}`);
+  const resetSession = useCallback(() => {
+    sessionGenerationRef.current += 1;
+    isPollingRequestRef.current = false;
+    setUploadedEvents([]);
+    setSessionUuid('');
+    setSessionUserId('');
+    setProcessingStatus('idle');
+    setProcessingError(null);
+    setAnalysisResult(null);
+    setCurrentTime(0);
+    setSubmissionMessage('');
+    setIsRefreshing(false);
+    setPollingTimedOut(false);
+    setStatusDiagnostics({
+      attempts: 0,
+      pollingActive: false,
+      lastPollAt: null,
+      lastStatus: null,
+      lastRawStatus: null,
+      lastHttpStatus: null,
+      lastError: null,
+    });
+  }, []);
+
+  const refreshSessionStatus = useCallback(
+    async (source: 'manual' | 'poll' = 'manual') => {
+      if (!sessionUuid || isPollingRequestRef.current) {
+        return;
       }
 
-      const data: SessionProcessResponse = await response.json();
+      const requestGeneration = sessionGenerationRef.current;
+      isPollingRequestRef.current = true;
+      setIsRefreshing(true);
+      setStatusDiagnostics((current) => ({
+        ...current,
+        attempts: current.attempts + 1,
+        pollingActive: current.pollingActive || source === 'poll',
+        lastPollAt: Date.now(),
+        lastError: null,
+      }));
 
-      // Mapeia a resposta para os estados reativos da aplicação
-      // Isso garante que os painéis laterais reflitam os dados processados
-      
-      // Atualiza os insights detectados pelo pipeline
-      const safeInsights = Array.isArray(data.insights)
-        ? data.insights.map((insight, index) => normalizeInsightEvent(insight, index))
-        : [];
-      setInsights(safeInsights);
+      try {
+        const response = await fetch(`/api/sessions/${sessionUuid}/status`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
 
-      // Atualiza a narrativa gerada pela IA
-      setNarrative(normalizeText(data.narrative, ""));
+        const data: unknown = await response.json().catch(() => ({}));
 
-      // Atualiza os dados psicométricos extraídos
-      setPsychometrics(normalizePsychometricData(data.psychometrics));
+        if (requestGeneration !== sessionGenerationRef.current) {
+          return;
+        }
 
-      // Atualiza a análise de intenção do usuário
-      setIntentAnalysis(normalizeIntentAnalysisData(data.intent_analysis));
+        setStatusDiagnostics((current) => ({
+          ...current,
+          lastHttpStatus: response.status,
+        }));
 
-      // Mapeia as ações do usuário para o estado de logs do TelemetryPanel
-      setLogs(normalizeTelemetryLogs(data.stats));
+        if (!response.ok) {
+          const fallbackMessage =
+            data && typeof data === 'object' && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+              ? (data as { error: string }).error
+              : `Erro HTTP ${response.status}`;
 
-    } catch (error) {
-      // Tratamento de erros robusto
-      console.error("Erro durante a análise com IA:", error);
-      
-      // Define a mensagem de erro apropriada para exibição na UI
-      if (error instanceof Error) {
-        setErrorMessage(error.message);
-      } else if (typeof error === 'string') {
-        setErrorMessage(error);
-      } else {
-        setErrorMessage("Ocorreu um erro inesperado durante a análise. Tente novamente.");
+          const diagnosticMessage = fallbackMessage;
+          throw new Error(diagnosticMessage);
+        }
+
+        const statusPayload = normalizeSessionJobStatus(data);
+        if (!statusPayload) {
+          throw new Error('Resposta de status inválida.');
+        }
+
+        if (statusPayload.user_id) {
+          setSessionUserId(statusPayload.user_id);
+        }
+
+        setPollingTimedOut(false);
+        setProcessingStatus(statusPayload.status);
+        setProcessingError(statusPayload.processing_error);
+        setStatusDiagnostics((current) => ({
+          ...current,
+          lastHttpStatus: response.status,
+          lastStatus: statusPayload.status,
+          lastRawStatus: statusPayload.raw_status ?? statusPayload.status,
+          lastError: null,
+        }));
+
+        if (statusPayload.status === 'completed') {
+          if (!statusPayload.result) {
+            setProcessingStatus('failed');
+            setProcessingError('A API retornou completed sem payload de resultado.');
+            setAnalysisResult(null);
+            setStatusDiagnostics((current) => ({
+              ...current,
+              lastStatus: 'failed',
+              lastError: 'A API retornou completed sem payload de resultado.',
+            }));
+            return;
+          }
+
+          setAnalysisResult(statusPayload.result);
+          return;
+        }
+
+        if (statusPayload.status === 'failed') {
+          setAnalysisResult(statusPayload.result);
+          setProcessingError(statusPayload.processing_error ?? 'A sessão falhou no worker.');
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+
+        if (requestGeneration !== sessionGenerationRef.current) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : 'Não foi possível consultar o status da sessão.';
+        setProcessingError(message);
+        setStatusDiagnostics((current) => ({
+          ...current,
+          lastError: message,
+        }));
+      } finally {
+        if (requestGeneration === sessionGenerationRef.current) {
+          setIsRefreshing(false);
+        }
+
+        isPollingRequestRef.current = false;
       }
-    } finally {
-      // Garante que o estado de processamento seja finalizado
-      setIsProcessing(false);
+    },
+    [sessionUuid]
+  );
+
+  useEffect(() => {
+    if (!hasSession) {
+      setStatusDiagnostics((current) => ({
+        ...current,
+        pollingActive: false,
+      }));
+      return undefined;
     }
-  };
 
-  // Filtra overlays ativos baseados no tempo atual de reprodução
-  // Considera um overlay como ativo se estiver dentro de uma janela de 1 segundo
-  const sessionDuration = Math.max(
-    0,
-    (events[events.length - 1]?.timestamp || 0) - (events[0]?.timestamp || 0)
-  );
-  const activeOverlays = insights.filter(
-    (i) => Math.abs(i.timestamp - currentTime) < 1000 && i.boundingBox
-  );
+    if (!shouldPoll) {
+      setStatusDiagnostics((current) => ({
+        ...current,
+        pollingActive: false,
+      }));
+      return undefined;
+    }
 
-  // SE NÃO TIVER ARQUIVO CARREGADO -> MOSTRA TELA DE UPLOAD
-  if (events.length === 0) {
+    let cancelled = false;
+    setStatusDiagnostics((current) => ({
+      ...current,
+      pollingActive: true,
+      lastError: null,
+    }));
+
+    // O timeout encerra o ciclo de polling explicitamente, em vez de deixar a UI presa no mesmo status.
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+
+      setPollingTimedOut(true);
+      setProcessingStatus('failed');
+      setProcessingError('Sessão ainda não saiu da fila no tempo esperado.');
+      setStatusDiagnostics((current) => ({
+        ...current,
+        pollingActive: false,
+        lastError: 'Polling encerrado por timeout.',
+      }));
+    }, POLLING_TIMEOUT_MS);
+
+    void refreshSessionStatus('poll');
+    const intervalId = window.setInterval(() => {
+      if (!cancelled) {
+        void refreshSessionStatus('poll');
+      }
+    }, POLLING_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+      isPollingRequestRef.current = false;
+    };
+  }, [hasSession, refreshSessionStatus, shouldPoll]);
+
+  const analysisReady = processingStatus === 'completed' && analysisResult !== null;
+  const statusBanner = statusCopy(processingStatus, pollingTimedOut, processingError);
+  const badgeLabel = statusLabel(processingStatus, pollingTimedOut);
+  const badgeClass = statusClassName(processingStatus, pollingTimedOut);
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+
+  if (!hasSession) {
     return (
-      <div className="flex flex-col h-screen bg-background text-foreground">
-        <header className="h-16 border-b border-border flex items-center justify-between px-8 bg-card">
-           <h1 className="font-semibold text-lg text-foreground">UX Auditor</h1>
+      <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.12),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.08),_transparent_22%),linear-gradient(180deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.98))] text-foreground">
+        <header className="border-b border-white/10 px-4 py-3 backdrop-blur md:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold tracking-wide text-white">UX Auditor Dashboard</h1>
+              <p className="text-xs text-slate-400">Upload rrweb e acompanhe a análise assíncrona em tempo real.</p>
+            </div>
+            <Badge variant="outline" className={`h-6 px-2 text-[10px] ${badgeClass}`}>
+              {badgeLabel}
+            </Badge>
+          </div>
         </header>
-        <FileUploader onFileLoaded={handleFileLoaded} />
+
+        <main className="flex flex-1 items-center justify-center px-4 py-8 md:px-6">
+          <div className="w-full max-w-5xl space-y-6">
+            <div className="mx-auto max-w-2xl text-center">
+              <div className="mb-4 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.3em] text-sky-200">
+                Upload seguro e replay
+              </div>
+              <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                Carregue um JSON rrweb para abrir o dashboard de análise.
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-slate-300 md:text-base">
+                O fluxo abaixo ocupa a tela útil inteira e foi pensado como um estado vazio deliberado, não como sobra de layout.
+              </p>
+            </div>
+
+            <div className="flex justify-center">
+              <FileUploader onFileLoaded={handleFileLoaded} />
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
 
-  // SE TIVER ARQUIVO -> MOSTRA PLAYER COM PAINÉIS
   return (
-    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans">
-      
-      {/* Lado Esquerdo - Painel de Telemetria */}
-      <aside className="w-[280px] hidden md:block z-20 shadow-xl border-r border-border">
-        {/* Exibe Skeleton durante o processamento da IA para evitar interface "congelada" */}
-        {isProcessing && logs.length === 0 ? (
-          <div className="flex flex-col h-full bg-card border-r border-border">
-            <div className="p-4 border-b border-border bg-card/50">
-              <Skeleton className="h-4 w-24" />
+    <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.10),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.08),_transparent_22%),linear-gradient(180deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.98))] text-foreground">
+      <header className="border-b border-white/10 px-4 py-3 backdrop-blur md:px-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={resetSession}
+              className="shrink-0 text-slate-300 hover:bg-white/5 hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <FileJson className="h-4 w-4 text-sky-300" />
+                <h1 className="truncate text-sm font-semibold text-white">
+                  Sessão {sessionUuid.slice(0, 8) || 'ativa'}
+                </h1>
+                <Badge variant="outline" className={`h-6 px-2 text-[10px] ${badgeClass}`}>
+                  {badgeLabel}
+                </Badge>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <span>{statusBanner}</span>
+                {submissionMessage && processingStatus === 'uploading' && (
+                  <span className="rounded-full border border-white/10 px-2 py-0.5">
+                    {submissionMessage}
+                  </span>
+                )}
+                {sessionUserId && <span className="rounded-full border border-white/10 px-2 py-0.5">user {sessionUserId}</span>}
+                {analysisReady && (
+                  <span className="rounded-full border border-cyan-400/30 px-2 py-0.5 text-cyan-300">resultado pronto</span>
+                )}
+              </div>
             </div>
-            <div className="flex-1 p-2 space-y-2">
-              {[...Array(8)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
           </div>
-        ) : (
-          <TelemetryPanel logs={logs} currentTime={currentTime} />
-        )}
-      </aside>
 
-      {/* Centro (Palco Principal) */}
-      <main className="flex-1 flex flex-col relative min-w-0">
-        <header className="h-14 border-b border-border flex items-center px-4 bg-card justify-between shrink-0">
-           <div className="flex items-center gap-3">
-             {/* Botão de voltar para a tela de upload */}
-             <Button variant="ghost" size="icon" onClick={resetSession} className="text-muted-foreground hover:text-foreground">
-               <ArrowLeft className="h-5 w-5" />
-             </Button>
-             <div>
-               <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                 <FileJson className="h-4 w-4 text-primary"/>
-                 {fileName}
-               </h1>
-             </div>
-           </div>
-           
-           {/* Botão de Iniciar Auditoria de IA - Renderizado condicionalmente */}
-           {sessionUuid && (
-             <Button
-               onClick={triggerAnalysis}
-               disabled={isProcessing}
-               className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
-             >
-                {isProcessing ? (
-                 <>
-                   {/* Ícone de carregamento animado durante o processamento */}
-                   <Sparkles className="h-4 w-4 animate-spin" />
-                   Processando com IA...
-                 </>
-               ) : (
-                 <>
-                   <Sparkles className="h-4 w-4" />
-                   Iniciar auditoria com IA
-                 </>
-               )}
-             </Button>
-           )}
-        </header>
-
-        {/* Exibição de erro caso a análise falhe */}
-        {errorMessage && (
-          <div className="mx-4 mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-center gap-2 text-destructive text-sm">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{errorMessage}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void refreshSessionStatus('manual')}
+              disabled={isRefreshing || processingStatus === 'uploading'}
+              className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Reconsultar status
+            </Button>
+            <Button onClick={resetSession} className="bg-sky-400 text-slate-950 hover:bg-sky-300">
+              Nova sessão
+            </Button>
           </div>
-        )}
-
-        {/* Indicador de narrativa gerada pela IA */}
-        {narrative && !isProcessing && (
-          <div className="mx-4 mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-md">
-            <p className="text-xs text-purple-300 font-medium mb-1">Diagnóstico da IA:</p>
-            <p className="text-sm text-foreground">{narrative}</p>
-          </div>
-        )}
-
-        <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden min-h-0">  
-          {/* Wrapper do Player: Força o player a ficar contido neste espaço */}
-          <div className="flex-1 w-full h-full relative flex items-center justify-center min-h-0">
-              <VideoPlayer 
-                events={events}
-                currentTime={currentTime}
-                overlays={activeOverlays}
-                onTimeUpdate={setCurrentTime}
-              />
-          </div>
-          {/* Timeline Visual (Só aparece se tiver insights gerados) */}
-          {insights.length > 0 && (
-            <div className="w-full max-w-5xl mt-8 px-1">
-               <div className="h-12 w-full bg-card border border-border rounded relative overflow-hidden">
-                  {/* Barra de progresso da reprodução */}
-                  <div 
-                    className="absolute top-0 bottom-0 border-r border-primary bg-primary/5 transition-all duration-100 ease-linear"
-                    style={{ width: sessionDuration > 0 ? `${(currentTime / sessionDuration) * 100}%` : "0%" }} 
-                  />
-                  {/* Marcadores de insights na timeline */}
-                  {insights.map(i => (
-                    <div 
-                      key={i.id}
-                      className={`absolute bottom-0 h-2 w-2 rounded-full mb-2 ml-[-4px] ${
-                        i.severity === 'critical' ? 'bg-destructive' : 'bg-yellow-500'
-                      }`}
-                      style={{ left: `${(i.timestamp / 5000) * 100}%` }} // Nota: Cálculo de tempo precisa ser normalizado com o total do vídeo real
-                    />
-                  ))}
-               </div>
-            </div>
-          )}
         </div>
+      </header>
+
+      {processingError && (
+        <div className="mx-4 mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-50 md:mx-6">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-200" />
+            <div className="min-w-0">
+              <p className="font-medium">Falha no fluxo assíncrono</p>
+              <p className="mt-1 text-red-50/80">{processingError}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="grid flex-1 min-h-0 gap-4 p-4 md:p-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <section className="flex min-h-0 min-w-0 flex-col gap-4">
+          <Card className="flex min-h-0 flex-col py-0 overflow-hidden border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30">
+            <CardHeader className="border-b border-white/10 !py-6">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
+                <Sparkles className="h-4 w-4 text-sky-300" />
+                Replay da sessão
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="flex min-h-0 min-w-0 flex-1 w-full p-0 overflow-hidden">
+              <div className="flex min-h-0 min-w-0 flex-1 w-full pt-6 overflow-hidden">
+                <VideoPlayer
+                  key={sessionUuid}
+                  events={uploadedEvents}
+                  currentTime={currentTime}
+                  overlays={activeOverlays}
+                  onTimeUpdate={setCurrentTime}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-white/[0.03] shadow-lg shadow-slate-950/20">
+            <CardHeader className="border-b border-white/10 pb-4">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-white">
+                Estado da ingestão
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Status</p>
+                <p className="mt-1 text-sm text-white">{badgeLabel}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Duração local</p>
+                <p className="mt-1 text-sm text-white">{sessionDuration} ms</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Eventos</p>
+                <p className="mt-1 text-sm text-white">{uploadedEvents.length}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Janela atual</p>
+                <p className="mt-1 text-sm text-white">{currentTime} ms</p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="min-w-0">
+          <InsightsPanel
+            result={analysisReady ? analysisResult : null}
+            currentTime={currentTime}
+            processingStatus={processingStatus}
+            processingError={processingError}
+            onRetryStatus={() => void refreshSessionStatus('manual')}
+          />
+        </section>
       </main>
 
-      {/* Lado Direito - Painel de Insights */}
-      <aside className="w-[300px] hidden lg:block z-20 shadow-xl border-l border-border">
-        {/* Exibe Skeleton durante o processamento da IA para evitar interface "congelada" */}
-        {isProcessing && insights.length === 0 ? (
-          <div className="flex flex-col h-full bg-card border-l border-border">
-            <div className="p-4 border-b border-border bg-card/50">
-              <Skeleton className="h-4 w-28" />
-            </div>
-            <div className="flex-1 p-4 space-y-4">
-              {/* Skeleton para seção de Psicometria */}
-              <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
-                <Skeleton className="h-4 w-24 mb-3" />
-                <Skeleton className="h-2 w-full mb-2" />
-                <Skeleton className="h-2 w-full mb-2" />
-                <Skeleton className="h-2 w-full" />
-              </div>
-              {/* Skeleton para seção de Intenção */}
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md">
-                <Skeleton className="h-4 w-28 mb-3" />
-                <Skeleton className="h-3 w-full mb-2" />
-                <Skeleton className="h-2 w-3/4" />
-              </div>
-              {/* Skeleton para lista de anomalias */}
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-20 w-full" />
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <InsightsPanel 
-            insights={insights} 
-            currentTime={currentTime}
-            psychometrics={psychometrics}
-            intentAnalysis={intentAnalysis}
-            narrative={narrative}
-          />
-        )}
-      </aside>
-
+      {isDevelopment && (
+        <div className="px-4 pb-4 md:px-6">
+          <DiagnosticsPanel data={statusDiagnostics} />
+        </div>
+      )}
     </div>
   );
 }

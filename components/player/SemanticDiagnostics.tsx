@@ -1,326 +1,193 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PsychometricData, IntentAnalysis } from "@/types/dashboard";
-import { Quote, Brain, Activity, TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
-import {
-  normalizeIntentAnalysisData,
-  normalizePsychometricData,
-  normalizeText,
-} from "@/lib/normalization";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { SessionProcessResponse } from "@/types/dashboard";
+import { normalizeText, safeNumber, safeUnknownArray } from "@/lib/normalization";
+import { BrainCircuit, CheckCircle2, ListChecks, Target } from "lucide-react";
+import type { ReactNode } from "react";
 
-/**
- * Tipo para o status da jornada do usuário
- * - progressing: usuário está progredindo normalmente na tarefa
- * - looping: usuário está preso em um loop de ações repetitivas
- * - erratic: comportamento errático, sem direção clara
- */
-type JourneyStatus = 'progressing' | 'looping' | 'erratic';
-
-/**
- * Interface de props para o componente SemanticDiagnostics
- * @property narrative - Texto narrativo gerado pela IA sobre a sessão
- * @property psychometrics - Dados psicométricos extraídos durante a análise
- * @property intent_analysis - Análise de intenção do usuário
- */
 interface SemanticDiagnosticsProps {
-  narrative?: string | null;
-  psychometrics?: PsychometricData | null;
-  intent_analysis?: IntentAnalysis | null;
+  result?: SessionProcessResponse | null;
 }
 
-interface SafeIntentAnalysis {
-  primary_intent: string;
-  success_probability: number;
-  barriers: string[];
-}
-
-/**
- * Determina o estado da jornada a partir dos sinais semânticos normalizados.
- * A lógica privilegia os cenários mais graves antes de cair no estado padrão.
- */
-function determineJourneyStatus(
-  psychometrics: PsychometricData, 
-  intentAnalysis: IntentAnalysis
-): JourneyStatus {
-  // Prioridade 1: frustração alta combinada com baixa probabilidade de sucesso.
-  if (psychometrics.frustration_score > 70 && intentAnalysis.success_probability < 30) {
-    return 'looping';
+function summarizeValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
   }
-  
-  // Prioridade 2: confusão alta combinada com múltiplas barreiras.
-  if (psychometrics.confusion_score > 70 && intentAnalysis.barriers.length >= 2) {
-    return 'erratic';
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
   }
-  
-  // Caso padrão: usuário está progredindo
-  return 'progressing';
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 4)
+      .map((item) => summarizeValue(item))
+      .filter((item) => item.length > 0)
+      .join(" • ");
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return entries
+      .slice(0, 4)
+      .map(([key, entry]) => `${key}: ${summarizeValue(entry)}`)
+      .join(" • ");
+  }
+
+  return "";
 }
 
-/**
- * Retorna a configuração visual do badge de status da jornada.
- */
-function getJourneyStatusConfig(status: JourneyStatus): {
-  className: string;
-  icon: React.ReactNode;
-  label: string;
-} {
-  switch (status) {
-    case 'progressing':
-      return {
-        className: 'bg-green-500/20 text-green-400 border-green-500/50',
-        icon: <TrendingUp className="w-3 h-3" />,
-        label: 'Progredindo'
-      };
-    case 'looping':
-      return {
-        className: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50',
-        icon: <RefreshCw className="w-3 h-3" />,
-        label: 'Em Loop'
-      };
-    case 'erratic':
-      return {
-        className: 'bg-red-500/20 text-red-400 border-red-500/50',
-        icon: <AlertCircle className="w-3 h-3" />,
-        label: 'Errático'
-      };
+function renderList(values: unknown[]): ReactNode {
+  if (values.length === 0) {
+    return <p className="text-sm text-muted-foreground">Nenhum dado disponível.</p>;
   }
-}
-
-/**
- * Função auxiliar para determinar a cor do indicador de progresso
- * baseada no valor do score (escala 0-10).
- * 
- * Regras de cores:
- * - Verde: score < 3 (baixo - boa experiência)
- * - Amarelo: score entre 3 e 7 (médio - atenção necessária)
- * - Vermelho: score > 7 (alto - problema crítico)
- * 
- * @param score - Valor do score (0-10)
- * @returns String com as classes CSS apropriadas para o indicador
- */
-function getProgressColor(score: number): string {
-  if (score < 3) {
-    // Verde para scores baixos - indica boa experiência
-    return "bg-green-500";
-  } else if (score <= 7) {
-    // Amarelo para scores médios - atenção necessária
-    return "bg-yellow-500";
-  } else {
-    // Vermelho para scores altos - problema crítico
-    return "bg-red-500";
-  }
-}
-
-/**
- * Função auxiliar para determinar a cor do texto do valor
- * seguindo a mesma lógica das barras de progresso.
- * 
- * @param score - Valor do score (0-10)
- * @returns String com as classes CSS apropriadas para o texto
- */
-function getTextColor(score: number): string {
-  if (score < 3) {
-    return "text-green-400";
-  } else if (score <= 7) {
-    return "text-yellow-400";
-  } else {
-    return "text-red-400";
-  }
-}
-
-/**
- * Função auxiliar para obter o rótulo descritivo do score
- * 
- * @param score - Valor do score (0-10)
- * @returns String com o rótulo descritivo
- */
-function getScoreLabel(score: number): string {
-  if (score < 3) {
-    return "Baixo";
-  } else if (score <= 7) {
-    return "Médio";
-  } else {
-    return "Alto";
-  }
-}
-
-/**
- * Componente de diagnóstico semântico executivo.
- * 
- * Apresenta uma visão consolidada da sessão de UX no topo do painel de insights:
- * - Narrativa em blockquote estilizado com borda lateral verde/roxo
- * - Barras de progresso para scores psicométricos (Frustração e Carga Cognitiva)
- * - Badges coloridos para status da jornada (progressing, looping, erratic)
- * 
- * Layout executivo otimizado para tomadas de decisão rápidas,
- * fornecendo resumo da IA antes dos detalhes técnicos.
- * 
- * @param narrative - Texto narrativo da sessão
- * @param psychometrics - Dados psicométricos completos
- * @param intent_analysis - Análise de intenção do usuário
- */
-export function SemanticDiagnostics({ 
-  narrative, 
-  psychometrics, 
-  intent_analysis 
-}: SemanticDiagnosticsProps) {
-  const safeNarrative = normalizeText(narrative, "Sem narrativa disponível.");
-  const safePsychometrics = normalizePsychometricData(psychometrics) ?? {
-    engagement_score: 0,
-    frustration_score: 0,
-    confusion_score: 0,
-    behavior_patterns: [],
-  };
-  const safeIntentAnalysis: SafeIntentAnalysis = normalizeIntentAnalysisData(intent_analysis) ?? {
-    primary_intent: "Não identificado",
-    success_probability: 0,
-    barriers: [],
-  };
-  const hasPrimaryIntent = safeIntentAnalysis.primary_intent !== "Não identificado";
-  const hasBarriers = safeIntentAnalysis.barriers.length > 0;
-
-  // Determina o status da jornada com base nos dados normalizados.
-  const journeyStatus = determineJourneyStatus(
-    {
-      engagement_score: safePsychometrics.engagement_score,
-      frustration_score: safePsychometrics.frustration_score,
-      confusion_score: safePsychometrics.confusion_score,
-      behavior_patterns: safePsychometrics.behavior_patterns,
-    },
-    {
-      primary_intent: safeIntentAnalysis.primary_intent,
-      secondary_intents: [],
-      success_probability: safeIntentAnalysis.success_probability,
-      barriers: safeIntentAnalysis.barriers,
-    }
-  );
-  const statusConfig = getJourneyStatusConfig(journeyStatus);
-  
-  // Converte scores de 0-100 para a escala 0-10 usada na visualização.
-  const frustrationScore = safePsychometrics.frustration_score / 10;
-  const cognitiveLoadScore = safePsychometrics.confusion_score / 10; // Usa confusão como proxy para carga cognitiva.
-  
-  // Calcula valores percentuais para as barras de progresso
-  const frustrationPercent = frustrationScore * 10;
-  const cognitiveLoadPercent = cognitiveLoadScore * 10;
 
   return (
-    <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/60 border-slate-700/50 shadow-lg">
-      {/* Cabeçalho do card com título e status da jornada */}
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-purple-400" />
-            Diagnóstico Semântico
+    <ul className="space-y-2">
+      {values.map((value, index) => (
+        <li key={`${index}-${summarizeValue(value)}`} className="rounded-lg border border-border/60 bg-background/60 p-3 text-sm text-foreground">
+          {summarizeValue(value)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function renderObjectPreview(value: unknown): ReactNode {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return <p className="text-sm text-muted-foreground">Sem hipótese estruturada disponível.</p>;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">Sem hipótese estruturada disponível.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.slice(0, 6).map(([key, entry]) => (
+        <div key={key} className="rounded-lg border border-border/60 bg-background/60 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{key}</p>
+          <p className="mt-1 text-sm text-foreground">{summarizeValue(entry) || "Indisponível"}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
+  const psychometrics = result?.psychometrics;
+  const intentAnalysis = result?.intent_analysis;
+  const structuredAnalysis = result?.structured_analysis;
+
+  const confidence = safeNumber(psychometrics?.overall_confidence, 0);
+  const intentConfidence = safeNumber(intentAnalysis?.overall_confidence, 0);
+  const frictionPoints = safeUnknownArray(psychometrics?.friction_points);
+  const progressSignals = safeUnknownArray(psychometrics?.progress_signals);
+  const hypotheses = safeUnknownArray(intentAnalysis?.hypotheses);
+  const goalHypothesis = psychometrics?.goal_hypothesis ?? intentAnalysis?.goal_hypothesis;
+  const goalSummary = normalizeText(
+    (goalHypothesis as Record<string, unknown> | undefined)?.summary,
+    ""
+  );
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-border/70 bg-card/80 shadow-sm">
+        <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
+            <BrainCircuit className="h-4 w-4 text-sky-300" />
+            Confiança e hipótese principal
           </CardTitle>
-          
-          {/* Badge de status da jornada */}
-          <Badge 
-            variant="outline" 
-            className={`flex items-center gap-1.5 text-[10px] h-5 px-2 ${statusConfig.className}`}
-          >
-            {statusConfig.icon}
-            {statusConfig.label}
-          </Badge>
-        </div>
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
-        {/* Seção de narrativa - blockquote estilizado com borda lateral */}
-        <div className="relative">
-          {/* Borda lateral com gradiente verde/roxo (identidade visual) */}
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-500 to-purple-500 rounded-full" />
-          
-          {/* Conteúdo do blockquote */}
-          <blockquote className="pl-4 pr-2 py-2 bg-slate-800/40 rounded-r-lg border border-slate-700/30 border-l-0">
-            <div className="flex items-start gap-2">
-              <Quote className="w-4 h-4 text-purple-400/60 shrink-0 mt-0.5" />
-              <p className="text-sm text-slate-200 italic leading-relaxed">
-                {safeNarrative}
-              </p>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Psicometria</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{confidence}</p>
             </div>
-          </blockquote>
-        </div>
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Intenção</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{intentConfidence}</p>
+            </div>
+          </div>
 
-        {/* Seção de métricas psicométricas */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <Brain className="w-3.5 h-3.5" />
-            Métricas de Experiência
-          </h4>
+          {goalSummary ? (
+            <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Resumo da hipótese</p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground">{goalSummary}</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border/60 bg-background/30 p-4 text-sm text-muted-foreground">
+              A API não forneceu um resumo textual da hipótese principal.
+            </div>
+          )}
 
-          {/* Barra de progresso para Frustração */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-slate-400">Frustração</span>
-              <div className="flex items-center gap-2">
-                <Badge 
-                  variant="outline" 
-                  className={`text-[10px] h-5 ${getTextColor(frustrationScore)} border-current/30`}
-                >
-                  {getScoreLabel(frustrationScore)}
-                </Badge>
-                <span className={`text-xs font-mono ${getTextColor(frustrationScore)}`}>
-                  {frustrationScore.toFixed(1)}/10
-                </span>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <Target className="h-3.5 w-3.5" />
+                Psychometrics.goal_hypothesis
               </div>
+              {renderObjectPreview(psychometrics?.goal_hypothesis)}
             </div>
-            {/* Container da barra com indicador de cor dinâmica */}
-            <div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
-              <div
-                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(frustrationScore)}`}
-                style={{ width: `${frustrationPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Barra de progresso para Carga Cognitiva */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-slate-400">Carga Cognitiva</span>
-              <div className="flex items-center gap-2">
-                <Badge 
-                  variant="outline" 
-                  className={`text-[10px] h-5 ${getTextColor(cognitiveLoadScore)} border-current/30`}
-                >
-                  {getScoreLabel(cognitiveLoadScore)}
-                </Badge>
-                <span className={`text-xs font-mono ${getTextColor(cognitiveLoadScore)}`}>
-                  {cognitiveLoadScore.toFixed(1)}/10
-                </span>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <Target className="h-3.5 w-3.5" />
+                intent_analysis.goal_hypothesis
               </div>
-            </div>
-            {/* Container da barra com indicador de cor dinâmica */}
-            <div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
-              <div
-                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(cognitiveLoadScore)}`}
-                style={{ width: `${cognitiveLoadPercent}%` }}
-              />
+              {renderObjectPreview(intentAnalysis?.goal_hypothesis)}
             </div>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Indicador adicional: intenção principal */}
-        {(hasPrimaryIntent || hasBarriers) && (
-          <div className="pt-2 border-t border-slate-700/30">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Intenção Principal</span>
-            <span className="text-xs text-slate-300 font-medium">
-              {safeIntentAnalysis.primary_intent}
-            </span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Prob. de Sucesso</span>
-            <span className={`text-xs font-mono ${
-              safeIntentAnalysis.success_probability > 70 ? 'text-green-400' :
-              safeIntentAnalysis.success_probability > 40 ? 'text-yellow-400' : 'text-red-400'
-            }`}>
-              {safeIntentAnalysis.success_probability}%
-            </span>
-          </div>
-        </div>
-        )}
-      </CardContent>
-    </Card>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="border-border/70 bg-card/80 shadow-sm">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
+              <ListChecks className="h-4 w-4 text-sky-300" />
+              Fricções
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">{renderList(frictionPoints)}</CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-card/80 shadow-sm">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
+              <CheckCircle2 className="h-4 w-4 text-sky-300" />
+              Sinais de progresso
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">{renderList(progressSignals)}</CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-border/70 bg-card/80 shadow-sm">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
+              <Badge variant="outline" className="h-6 px-2 text-[10px]">
+                {hypotheses.length}
+              </Badge>
+            Hipóteses
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">{renderList(hypotheses)}</CardContent>
+      </Card>
+
+      {structuredAnalysis && (
+        <Card className="border-border/70 bg-card/80 shadow-sm">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
+              <BrainCircuit className="h-4 w-4 text-sky-300" />
+              Estrutura analítica rica
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">{renderObjectPreview(structuredAnalysis)}</CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

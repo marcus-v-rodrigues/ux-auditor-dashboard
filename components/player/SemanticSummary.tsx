@@ -1,174 +1,159 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Brain } from "lucide-react";
+import type { ProcessingStatus, SessionProcessResponse } from "@/types/dashboard";
 import { normalizeText, safeNumber } from "@/lib/normalization";
+import { FileText, RefreshCw, Sparkles, SquareActivity } from "lucide-react";
 
-/**
- * Interface para os dados psicométricos do resumo semântico
- * Contém scores de frustração e carga cognitiva em escala 0-10
- */
-interface PsychometricsSummary {
-  /** Score de frustração (0-10) */
-  frustration_score: number;
-  /** Score de carga cognitiva (0-10) */
-  cognitive_load_score: number;
-}
-
-/**
- * Interface de props para o componente SemanticSummary
- * @property narrative - Texto narrativo gerado pela IA sobre a sessão
- * @property psychometrics - Objeto contendo os scores psicométricos
- */
 interface SemanticSummaryProps {
-  narrative?: string | null;
-  psychometrics?: PsychometricsSummary | null;
+  result?: SessionProcessResponse | null;
+  status: ProcessingStatus;
+  processingError?: string | null;
+  onRetryStatus?: () => void;
 }
 
-/**
- * Retorna a cor da barra de progresso de acordo com o score normalizado.
- */
-function getProgressColor(score: number): string {
-  if (score < 3) {
-    // Verde para scores baixos - indica boa experiência
-    return "bg-green-500";
-  } else if (score >= 4 && score <= 7) {
-    // Amarelo para scores médios - atenção necessária
-    return "bg-yellow-500";
-  } else if (score > 8) {
-    // Vermelho para scores altos - problema crítico
-    return "bg-red-500";
+function statusLabel(status: ProcessingStatus): string {
+  switch (status) {
+    case "idle":
+      return "Aguardando upload";
+    case "uploading":
+      return "Enviando";
+    case "queued":
+      return "Na fila";
+    case "processing":
+      return "Processando";
+    case "completed":
+      return "Concluída";
+    case "failed":
+      return "Falhou";
   }
-  // Caso intermediário (score entre 3 e 4, ou entre 7 e 8)
-  return "bg-yellow-500";
 }
 
-/**
- * Retorna a cor do texto do badge seguindo a mesma lógica da barra.
- */
-function getTextColor(score: number): string {
-  if (score < 3) {
-    return "text-green-400";
-  } else if (score >= 4 && score <= 7) {
-    return "text-yellow-400";
-  } else if (score > 8) {
-    return "text-red-400";
+function statusClassName(status: ProcessingStatus): string {
+  switch (status) {
+    case "completed":
+      return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+    case "failed":
+      return "bg-red-500/15 text-red-200 border-red-500/30";
+    case "processing":
+    case "uploading":
+      return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+    case "queued":
+      return "bg-sky-500/15 text-sky-300 border-sky-500/30";
+    default:
+      return "bg-slate-500/15 text-slate-300 border-slate-500/30";
   }
-  return "text-yellow-400";
 }
 
-/**
- * Converte o score em um rótulo curto para leitura rápida.
- */
-function getScoreLabel(score: number): string {
-  if (score < 3) {
-    return "Baixo";
-  } else if (score >= 4 && score <= 7) {
-    return "Médio";
-  } else if (score > 8) {
-    return "Alto";
-  }
-  return "Médio";
-}
-
-/**
- * Componente de resumo semântico executivo.
- * 
- * Apresenta uma visão consolidada da sessão de UX com:
- * - Narrativa em itálico como resumo da sessão
- * - Barras de progresso para scores psicométricos
- * - Cores dinâmicas baseadas nos valores dos scores
- * 
- * Layout executivo otimizado para tomadas de decisão rápidas.
- * 
- * @param narrative - Texto narrativo da sessão
- * @param psychometrics - Dados psicométricos com scores de frustração e carga cognitiva
- */
-export function SemanticSummary({ narrative, psychometrics }: SemanticSummaryProps) {
-  const safeNarrative = normalizeText(narrative, "Sem resumo disponível.");
-  const safePsychometrics = {
-    frustration_score: safeNumber(psychometrics?.frustration_score, 0),
-    cognitive_load_score: safeNumber(psychometrics?.cognitive_load_score, 0),
-  };
-
-  // Calcula valores percentuais para as barras de progresso (escala 0-10 para 0-100%)
-  const frustrationPercent = (safePsychometrics.frustration_score / 10) * 100;
-  const cognitiveLoadPercent = (safePsychometrics.cognitive_load_score / 10) * 100;
+export function SemanticSummary({
+  result,
+  status,
+  processingError,
+  onRetryStatus,
+}: SemanticSummaryProps) {
+  const narrative = normalizeText(result?.narrative, "");
+  const hasNarrative = narrative.length > 0;
+  const stats = result?.stats;
+  const totalEvents = safeNumber(stats?.total_events, 0);
+  const kinematicVectors = safeNumber(stats?.kinematic_vectors, 0);
+  const userActions = safeNumber(stats?.user_actions, 0);
+  const mlInsights = safeNumber(stats?.ml_insights, 0);
+  const rageClicks = safeNumber(stats?.rage_clicks, 0);
+  const confidence = safeNumber(result?.psychometrics?.overall_confidence, 0);
+  const goalSummary = normalizeText(
+    result?.psychometrics?.goal_hypothesis?.summary ??
+      result?.intent_analysis?.goal_hypothesis?.summary,
+    ""
+  );
 
   return (
-    <Card className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 border-slate-700/50">
-      {/* Cabeçalho do card com ícone e título */}
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-          <FileText className="w-4 h-4 text-purple-400" />
-          Resumo Executivo
-        </CardTitle>
+    <Card className="border-border/70 bg-card/80 shadow-sm">
+      <CardHeader className="border-b border-border/60 pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
+              <FileText className="h-4 w-4 text-sky-300" />
+              Resumo semântico
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Estado atual da sessão e leitura executiva do processamento assíncrono.
+            </p>
+          </div>
+          <Badge variant="outline" className={`h-6 px-2 text-[10px] ${statusClassName(status)}`}>
+            {statusLabel(status)}
+          </Badge>
+        </div>
       </CardHeader>
-      
-      <CardContent className="space-y-4">
-        {/* Seção de narrativa - exibida em itálico como resumo da sessão */}
-        <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/30">
-          <p className="text-sm text-slate-200 italic leading-relaxed">
-            &ldquo;{safeNarrative}&rdquo;
-          </p>
-        </div>
 
-        {/* Seção de métricas psicométricas */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <Brain className="w-3.5 h-3.5" />
-            Métricas Psicométricas
-          </h4>
-
-          {/* Barra de progresso para Frustração */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-slate-400">Frustração</span>
-              <div className="flex items-center gap-2">
-                <Badge 
-                  variant="outline" 
-                  className={`text-[10px] h-5 ${getTextColor(safePsychometrics.frustration_score)} border-current/30`}
-                >
-                  {getScoreLabel(safePsychometrics.frustration_score)}
-                </Badge>
-                <span className={`text-xs font-mono ${getTextColor(safePsychometrics.frustration_score)}`}>
-                  {safePsychometrics.frustration_score.toFixed(1)}/10
-                </span>
-              </div>
+      <CardContent className="space-y-4 pt-4">
+        {hasNarrative ? (
+          <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-sky-300" />
+              Narrativa
             </div>
-            {/* Container da barra com indicador de cor dinâmica */}
-            <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
-              <div
-                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(safePsychometrics.frustration_score)}`}
-                style={{ width: `${frustrationPercent}%` }}
-              />
-            </div>
+            <p className="text-sm leading-relaxed text-foreground">{narrative}</p>
           </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border/60 bg-background/30 p-4 text-sm text-muted-foreground">
+            Narrativa ainda indisponível. O worker pode estar em fila ou processando a sessão.
+          </div>
+        )}
 
-          {/* Barra de progresso para Carga Cognitiva */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-slate-400">Carga Cognitiva</span>
-              <div className="flex items-center gap-2">
-                <Badge 
-                  variant="outline" 
-                  className={`text-[10px] h-5 ${getTextColor(safePsychometrics.cognitive_load_score)} border-current/30`}
-                >
-                  {getScoreLabel(safePsychometrics.cognitive_load_score)}
-                </Badge>
-                <span className={`text-xs font-mono ${getTextColor(safePsychometrics.cognitive_load_score)}`}>
-                  {safePsychometrics.cognitive_load_score.toFixed(1)}/10
-                </span>
-              </div>
-            </div>
-            {/* Container da barra com indicador de cor dinâmica */}
-            <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
-              <div
-                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${getProgressColor(safePsychometrics.cognitive_load_score)}`}
-                style={{ width: `${cognitiveLoadPercent}%` }}
-              />
-            </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Confiança</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{confidence}</p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Eventos</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{totalEvents}</p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Ações</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{userActions}</p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Vetores cinéticos</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{kinematicVectors}</p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Insights ML</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{mlInsights}</p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Rage clicks</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{rageClicks}</p>
           </div>
         </div>
+
+        {goalSummary && (
+          <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <SquareActivity className="h-3.5 w-3.5 text-sky-300" />
+              Hipótese principal
+            </div>
+            <p className="text-sm leading-relaxed text-foreground">{goalSummary}</p>
+          </div>
+        )}
+
+        {status === "failed" && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-sm font-medium text-red-200">Processamento interrompido.</p>
+            <p className="mt-1 text-sm text-red-100/80">
+              {normalizeText(processingError, "O worker não retornou um erro detalhado.")}
+            </p>
+            {onRetryStatus && (
+              <button
+                type="button"
+                onClick={onRetryStatus}
+                className="mt-3 inline-flex items-center gap-2 rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-100 transition-colors hover:bg-red-500/10"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Reconsultar status
+              </button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

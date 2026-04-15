@@ -1,313 +1,302 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { InsightEvent, PsychometricData, IntentAnalysis } from "@/types/dashboard";
-import { Eye, AlertTriangle, CheckCircle2, Brain, Target, BarChart3 } from "lucide-react";
-import {
-  normalizeInsightEvent,
-  normalizeIntentAnalysisData,
-  normalizePsychometricData,
-  normalizeText,
-  safeNumber,
-} from "@/lib/normalization";
+import { Skeleton } from "@/components/ui/skeleton";
+import type {
+  InsightEvent,
+  ProcessingStatus,
+  SessionProcessResponse,
+} from "@/types/dashboard";
+import { safeNumber, safeString } from "@/lib/normalization";
+import { AlertTriangle, BarChart3, Clock3, FileText, Layers3 } from "lucide-react";
 import { SemanticSummary } from "./SemanticSummary";
 import { SemanticDiagnostics } from "./SemanticDiagnostics";
 
-/**
- * Interface de props para o componente InsightsPanel
- * @property insights - Array completo de insights/anomalias detectadas pela IA
- * @property currentTime - Tempo atual da reprodução em milissegundos
- * @property psychometrics - Dados psicométricos extraídos durante a análise (opcional)
- * @property intentAnalysis - Análise de intenção do usuário (opcional)
- * @property narrative - Texto narrativo gerado pela IA sobre a sessão (opcional)
- */
 interface Props {
-  insights?: InsightEvent[] | null;
+  result?: SessionProcessResponse | null;
   currentTime: number;
-  psychometrics?: PsychometricData | null;
-  intentAnalysis?: IntentAnalysis | null;
-  narrative?: string | null;
+  processingStatus: ProcessingStatus;
+  processingError?: string | null;
+  onRetryStatus?: () => void;
 }
 
-interface SafeIntentAnalysis {
-  primary_intent: string;
-  secondary_intents: string[];
-  success_probability: number;
-  barriers: string[];
+function formatInsightLabel(insight: InsightEvent): string {
+  const severity = safeString(insight.severity, "medium");
+  if (severity === "critical") {
+    return "Crítico";
+  }
+  if (severity === "low") {
+    return "Baixo";
+  }
+  return "Médio";
 }
 
-/**
- * Painel lateral que exibe insights e anomalias detectadas pela IA durante a sessão.
- *
- * Funcionalidades:
- * - Filtra insights baseados no tempo atual de reprodução (janela de 1.5s)
- * - Exibe apenas insights relevantes para o momento atual
- * - Classificação por severidade (crítico/aviso)
- * - Visualização de bounding boxes no player quando aplicável
- * - Feedback visual de estado (vazio ou com anomalias)
- * - Exibição de dados psicométricos e análise de intenção
- * - Resumo semântico executivo com narrativa da sessão
- *
- * @param insights - Lista de todos os insights detectados
- * @param currentTime - Tempo atual em milissegundos
- * @param psychometrics - Dados psicométricos extraídos (opcional)
- * @param intentAnalysis - Análise de intenção do usuário (opcional)
- * @param narrative - Texto narrativo gerado pela IA sobre a sessão (opcional)
- */
-export function InsightsPanel({ insights, currentTime, psychometrics, intentAnalysis, narrative }: Props) {
-  const safeCurrentTime = safeNumber(currentTime, 0);
-  const safePsychometrics = normalizePsychometricData(psychometrics) ?? {
-    engagement_score: 0,
-    frustration_score: 0,
-    confusion_score: 0,
-    behavior_patterns: [],
-  };
-  const safeIntentAnalysis: SafeIntentAnalysis = normalizeIntentAnalysisData(intentAnalysis) ?? {
-    primary_intent: "Não identificado",
-    secondary_intents: [],
-    success_probability: 0,
-    barriers: [],
-  };
-  const safeNarrative = normalizeText(narrative, "");
-  const hasNarrative = safeNarrative.trim().length > 0;
-  const safeInsights = Array.isArray(insights)
-    ? insights.map((insight, index) => normalizeInsightEvent(insight, index))
-    : [];
+function statusMessage(status: ProcessingStatus): string {
+  switch (status) {
+    case "uploading":
+      return "Sessão em envio.";
+    case "queued":
+      return "Sessão recebida. Aguardando worker.";
+    case "processing":
+      return "Worker em execução. Processando sessão.";
+    case "completed":
+      return "Análise concluída.";
+    case "failed":
+      return "Falha no processamento ou timeout de polling.";
+    default:
+      return "Aguardando o próximo upload.";
+  }
+}
 
-  /**
-   * Filtra insights ativos baseando-se no tempo atual de reprodução.
-   * Considera um insight como "ativo" se estiver dentro de uma janela
-   * de ±1.5 segundos do tempo atual, proporcionando uma experiência
-   * visual mais fluida e contextual.
-   */
-  const activeInsights = safeInsights.filter(
-    (i) => Math.abs(i.timestamp - safeCurrentTime) < 1500
+function statusBadgeClass(status: ProcessingStatus): string {
+  switch (status) {
+    case "completed":
+      return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+    case "failed":
+      return "bg-red-500/15 text-red-200 border-red-500/30";
+    case "processing":
+    case "uploading":
+      return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+    case "queued":
+      return "bg-sky-500/15 text-sky-300 border-sky-500/30";
+    default:
+      return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+  }
+}
+
+function describeValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 4).map((item) => describeValue(item)).filter(Boolean).join(" • ");
+  }
+
+  if (value && typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "[objeto complexo]";
+    }
+  }
+
+  return "";
+}
+
+function renderSkeleton() {
+  return (
+    <div className="space-y-4">
+      <Card className="border-border/70 bg-card/80 shadow-sm">
+        <CardHeader className="border-b border-border/60 pb-4">
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-3 w-72" />
+        </CardHeader>
+        <CardContent className="space-y-3 pt-4">
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+          </div>
+        </CardContent>
+      </Card>
+      <Skeleton className="h-64 w-full rounded-xl" />
+      <Skeleton className="h-52 w-full rounded-xl" />
+      <Skeleton className="h-52 w-full rounded-xl" />
+    </div>
   );
+}
 
-  const hasBehaviorPatterns = safePsychometrics.behavior_patterns.length > 0;
-  const hasSecondaryIntents = safeIntentAnalysis.secondary_intents.length > 0;
-  const hasBarriers = safeIntentAnalysis.barriers.length > 0;
+export function InsightsPanel({
+  result,
+  currentTime,
+  processingStatus,
+  processingError,
+  onRetryStatus,
+}: Props) {
+  const insights = result?.insights ?? [];
+  const activeInsights = insights.filter((insight) => Math.abs(insight.timestamp - currentTime) < 1000);
+  const hasInsights = insights.length > 0;
   const hasActiveInsights = activeInsights.length > 0;
-  const summaryPsychometrics = {
-    frustration_score: safePsychometrics.frustration_score / 10,
-    cognitive_load_score: safePsychometrics.confusion_score / 10,
-  };
+  const processingMessage = statusMessage(processingStatus);
+  const totalInsights = safeNumber(insights.length, 0);
+  const structuredAnalysis = result?.structured_analysis;
+  const semanticBundle = result?.semantic_bundle;
+  const llmOutput = result?.llm_output;
 
   return (
-    <div className="flex flex-col h-full bg-card border-l border-border">
-      {/* Cabeçalho do painel */}
-      <div className="p-4 border-b border-border bg-card/50">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <Eye className="w-4 h-4 text-purple-500" />
-          Diagnóstico por IA
-        </h2>
-      </div>
-      
-      {/* Área de scroll com lista de insights e dados processados */}
-      <ScrollArea className="flex-1 p-4">
-        {/* Diagnóstico Semântico Executivo - Resumo da IA no topo do painel */}
-        {hasNarrative && (psychometrics || intentAnalysis) && (
-          <div className="mb-4">
-            <SemanticDiagnostics
-              narrative={safeNarrative}
-              psychometrics={{
-                engagement_score: safePsychometrics.engagement_score,
-                frustration_score: safePsychometrics.frustration_score,
-                confusion_score: safePsychometrics.confusion_score,
-                behavior_patterns: safePsychometrics.behavior_patterns,
-              }}
-              intent_analysis={{
-                primary_intent: safeIntentAnalysis.primary_intent,
-                secondary_intents: safeIntentAnalysis.secondary_intents,
-                success_probability: safeIntentAnalysis.success_probability,
-                barriers: safeIntentAnalysis.barriers,
-              }}
-            />
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30 backdrop-blur">
+      <div className="border-b border-white/10 px-5 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
+              <BarChart3 className="h-4 w-4 text-sky-300" />
+              Resultados
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Sessão sincronizada com o replay e organizada pelo contrato real da API.
+            </p>
           </div>
-        )}
-
-        {/* Seção de Dados Psicométricos - Exibida quando disponível */}
-        {psychometrics && (
-          <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2 mb-3">
-              <Brain className="w-4 h-4" />
-              Psicometria
-            </h3>
-            <div className="space-y-2">
-              {/* Barra de engajamento */}
-              <div>
-              <div className="flex justify-between text-[10px] mb-1">
-                <span className="text-muted-foreground">Engajamento</span>
-                <span className="text-green-400">{safePsychometrics.engagement_score}%</span>
-                </div>
-                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-green-500 rounded-full transition-all"
-                    style={{ width: `${safePsychometrics.engagement_score}%` }}
-                  />
-                </div>
-              </div>
-              {/* Barra de frustração */}
-              <div>
-                <div className="flex justify-between text-[10px] mb-1">
-                  <span className="text-muted-foreground">Frustração</span>
-                  <span className="text-red-400">{safePsychometrics.frustration_score}%</span>
-                </div>
-                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-red-500 rounded-full transition-all"
-                    style={{ width: `${safePsychometrics.frustration_score}%` }}
-                  />
-                </div>
-              </div>
-              {/* Barra de confusão */}
-              <div>
-                <div className="flex justify-between text-[10px] mb-1">
-                  <span className="text-muted-foreground">Confusão</span>
-                  <span className="text-yellow-400">{safePsychometrics.confusion_score}%</span>
-                </div>
-                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-yellow-500 rounded-full transition-all"
-                    style={{ width: `${safePsychometrics.confusion_score}%` }}
-                  />
-                </div>
-              </div>
-                {/* Padrões de comportamento */}
-                {hasBehaviorPatterns && (
-                  <div className="mt-2 pt-2 border-t border-blue-500/20">
-                    <p className="text-[10px] text-muted-foreground mb-1">Padrões:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {safePsychometrics.behavior_patterns.map((pattern, idx) => (
-                        <Badge
-                          key={idx}
-                          variant="outline"
-                          className="text-[9px] h-4 bg-blue-500/10 border-blue-500/30 text-blue-300"
-                        >
-                          {pattern}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-            </div>
-          </div>
-        )}
-
-        {/* Seção de Análise de Intenção - Exibida quando disponível */}
-        {intentAnalysis && (
-          <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2 mb-3">
-              <Target className="w-4 h-4" />
-              Intenção do Usuário
-            </h3>
-            {/* Intenção principal */}
-            <div className="mb-2">
-            <p className="text-[10px] text-muted-foreground mb-1">Intenção Principal:</p>
-            <p className="text-xs text-foreground font-medium">{safeIntentAnalysis.primary_intent}</p>
-            </div>
-            {/* Intenções secundárias */}
-            {hasSecondaryIntents && (
-              <div className="mb-2">
-                <p className="text-[10px] text-muted-foreground mb-1">Intenções Secundárias:</p>
-                <div className="flex flex-wrap gap-1">
-                  {safeIntentAnalysis.secondary_intents.map((intent, idx) => (
-                    <Badge key={idx} variant="outline" className="text-[9px] h-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
-                      {intent}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Probabilidade de sucesso */}
-            <div className="mb-2">
-              <div className="flex justify-between text-[10px] mb-1">
-                <span className="text-muted-foreground">Prob. de Sucesso</span>
-                <span className="text-emerald-400">{safeIntentAnalysis.success_probability}%</span>
-              </div>
-              <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${safeIntentAnalysis.success_probability}%` }}
-                />
-              </div>
-            </div>
-            {/* Barreiras identificadas */}
-            {hasBarriers && (
-              <div className="mt-2 pt-2 border-t border-emerald-500/20">
-            <p className="text-[10px] text-muted-foreground mb-1">Barreiras:</p>
-                <ul className="text-[10px] text-red-300 space-y-1">
-                  {safeIntentAnalysis.barriers.map((barrier, idx) => (
-                    <li key={idx} className="flex items-start gap-1">
-                      <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                      {barrier}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Seção de Insights/Anomalias */}
-        <div className="mb-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
-            <BarChart3 className="w-4 h-4 text-orange-500" />
-            Anomalias Detectadas
-          </h3>
+          <Badge variant="outline" className={`h-6 px-2 text-[10px] ${statusBadgeClass(processingStatus)}`}>
+            {processingStatus}
+          </Badge>
         </div>
-        
-        {/* Estado vazio: nenhum insight ativo no momento */}
-        {!hasActiveInsights ? (
-          <div className="flex flex-col items-center justify-center h-40 text-muted-foreground space-y-2">
-            <CheckCircle2 className="w-8 h-8 opacity-20" />
-            <p className="text-xs">Nenhuma anomalia no momento.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <span className="rounded-full border border-white/10 px-2 py-0.5">{processingMessage}</span>
+          <span className="rounded-full border border-white/10 px-2 py-0.5">
+            {totalInsights} insights
+          </span>
+          <span className="rounded-full border border-white/10 px-2 py-0.5">
+            t={currentTime}ms
+          </span>
+        </div>
+        {processingError && (
+          <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium">Falha de processamento</p>
+                <p className="mt-1 text-red-100/80">{processingError}</p>
+                {onRetryStatus && (
+                  <button
+                    type="button"
+                    onClick={onRetryStatus}
+                    className="mt-2 inline-flex items-center gap-2 rounded-md border border-red-500/30 px-2.5 py-1 text-[10px] font-medium text-red-100 transition-colors hover:bg-red-500/10"
+                  >
+                    Reconsultar status
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
-        ) : (
-          /* Lista de insights ativos */
-          <div className="space-y-3">
-            {activeInsights.map((insight) => (
-              <Card key={insight.id} className={`bg-secondary border-0 border-l-4 ${
-                // Indicador visual de severidade na borda esquerda
-                insight.severity === 'critical' ? 'border-l-destructive' : 'border-l-yellow-500'
-              }`}>
-                <CardHeader className="p-3 pb-1">
-                  <div className="flex justify-between items-center mb-1">
-                    {/* Badge com tipo do insight e cor baseada na severidade */}
-                    <Badge variant="outline" className={`text-[10px] h-5 ${
-                         insight.severity === 'critical' ? 'text-destructive border-destructive/50 bg-destructive/10' : 'text-yellow-400 border-yellow-900 bg-yellow-900/20'
-                    }`}>
-                      {insight.type}
-                    </Badge>
-                    {/* Timestamp do insight */}
-                    <span className="text-[10px] text-muted-foreground font-mono">{insight.timestamp}ms</span>
-                  </div>
+        )}
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="space-y-4 p-5">
+          {processingStatus === "queued" || processingStatus === "processing" ? (
+            renderSkeleton()
+          ) : (
+            <>
+              <SemanticSummary
+                result={result}
+                status={processingStatus}
+                processingError={processingError}
+                onRetryStatus={onRetryStatus}
+              />
+
+              <SemanticDiagnostics result={result} />
+
+              <Card className="border-border/70 bg-card/80 shadow-sm">
+                <CardHeader className="border-b border-border/60 pb-4">
+                  <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
+                    <Clock3 className="h-4 w-4 text-sky-400" />
+                    Insights temporais
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="p-3 pt-0">
-                  {/* Descrição detalhada do insight */}
-                  <p className="text-xs text-foreground leading-relaxed">{insight.message}</p>
-                  
-                  {/* Indicador de ação requerida para insights críticos */}
-                  {insight.severity === 'critical' && (
-                    <div className="flex items-center gap-1 mt-2 text-[10px] text-destructive font-bold uppercase tracking-wide">
-                      <AlertTriangle className="w-3 h-3" /> Ação Requerida
+                <CardContent className="space-y-3 pt-4">
+                  {!hasInsights ? (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/30 p-4 text-sm text-muted-foreground">
+                      Nenhum insight foi retornado pela API.
                     </div>
+                  ) : !hasActiveInsights ? (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/30 p-4 text-sm text-muted-foreground">
+                      Há insights disponíveis, mas nenhum está alinhado com o tempo atual do replay.
+                    </div>
+                  ) : (
+                    activeInsights.map((insight) => (
+                      <div
+                        key={insight.id}
+                        className="rounded-xl border border-border/60 bg-background/60 p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px]">
+                              {insight.type}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${
+                                insight.severity === "critical"
+                                  ? "border-red-500/30 bg-red-500/10 text-red-200"
+                                  : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                              }`}
+                            >
+                              {formatInsightLabel(insight)}
+                            </Badge>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">{insight.timestamp}ms</span>
+                        </div>
+                        <p className="mt-3 text-sm leading-relaxed text-foreground">{insight.message}</p>
+                        {insight.boundingBox && (
+                          <div className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+                            overlay disponível para sincronização visual
+                          </div>
+                        )}
+                      </div>
+                    ))
                   )}
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
 
-        {/* Seção de Resumo Semântico - Exibida na parte inferior quando narrativa está disponível */}
-        {hasNarrative && psychometrics && (
-          <div className="mt-6 pt-4 border-t border-border">
-            <SemanticSummary
-              narrative={safeNarrative}
-              psychometrics={summaryPsychometrics}
-            />
-          </div>
-        )}
+              {structuredAnalysis ? (
+                <Card className="border-border/70 bg-card/80 shadow-sm">
+                  <CardHeader className="border-b border-border/60 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
+                      <Layers3 className="h-4 w-4 text-sky-400" />
+                      Estrutura analítica rica
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-4">
+                    {Object.entries(structuredAnalysis).slice(0, 6).map(([key, value]) => (
+                      <div key={key} className="rounded-xl border border-border/60 bg-background/60 p-3">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-400">{key}</p>
+                        <p className="mt-1 text-sm text-white">{describeValue(value) || "Indisponível"}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {semanticBundle ? (
+                <Card className="border-border/70 bg-card/80 shadow-sm">
+                  <CardHeader className="border-b border-border/60 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
+                      <FileText className="h-4 w-4 text-sky-400" />
+                      Semantic bundle
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <pre className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
+                      {JSON.stringify(semanticBundle, null, 2)}
+                    </pre>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {llmOutput ? (
+                <Card className="border-border/70 bg-card/80 shadow-sm">
+                  <CardHeader className="border-b border-border/60 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
+                      <FileText className="h-4 w-4 text-sky-400" />
+                      Saída bruta do LLM
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <pre className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
+                      {JSON.stringify(llmOutput, null, 2)}
+                    </pre>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </>
+          )}
+        </div>
       </ScrollArea>
     </div>
   );

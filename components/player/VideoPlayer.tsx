@@ -1,38 +1,26 @@
-// src/components/player/VideoPlayer.tsx
 'use client';
 
-import React, { useEffect, useEffectEvent, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import rrwebPlayer from 'rrweb-player';
 import 'rrweb-player/dist/style.css';
+import { FastForward, Pause, Play, RotateCcw } from 'lucide-react';
 import { InsightEvent, RrwebSessionEvent } from '@/types/dashboard';
-import { Play, Pause, FastForward, RotateCcw } from 'lucide-react';
 
-type RrwebPlayerState = 'playing' | 'paused' | 'ended' | string;
-
-type RrwebPlayerLike = {
-  play: () => void;
-  pause: () => void;
-  goto: (time: number) => void;
-  setSpeed: (speed: number) => void;
-  addEventListener: (
-    eventName: 'ui-update-player-state',
-    handler: (event: { payload?: RrwebPlayerState }) => void
-  ) => void;
-  replayer?: {
-    getCurrentTime: () => number;
-  };
-  getReplayer?: () => {
-    getCurrentTime: () => number;
-  };
+type RrwebPlayerInstance = InstanceType<typeof rrwebPlayer>;
+type RrwebPlayerWithDestroy = RrwebPlayerInstance & {
+  destroy?: () => void;
+};
+type RrwebPlayerWithSizing = RrwebPlayerWithDestroy & {
+  $set?: (props: { width?: number; height?: number }) => void;
+  triggerResize?: () => void;
+};
+type PlayerStatePayload = {
+  payload?: 'playing' | 'paused' | 'ended' | string;
+};
+type TimePayload = {
+  payload?: number;
 };
 
-/**
- * Interface de props para o componente VideoPlayer
- * @property events - Array de eventos rrweb gravados da sessão
- * @property onTimeUpdate - Callback executado quando o tempo de reprodução muda
- * @property overlays - Array de insights para exibir como overlays visuais
- * @property currentTime - Tempo atual da reprodução em milissegundos (controlado externamente)
- */
 interface Props {
   events: RrwebSessionEvent[];
   onTimeUpdate: (time: number) => void;
@@ -40,397 +28,386 @@ interface Props {
   currentTime: number;
 }
 
-/**
- * Componente principal de reprodução de sessões rrweb.
- *
- * Funcionalidades:
- * - Reprodução de sessões gravadas usando a biblioteca rrweb-player
- * - Controles customizados de playback (play/pause, seek, velocidade, restart)
- * - Sincronização de tempo com componentes externos (painéis de insights/telemetria)
- * - Exibição de overlays visuais para insights/anomalias detectadas
- * - Layout responsivo com escala automática (fit screen)
- * - Gerenciamento de estado de reprodução
- *
- * @param events - Eventos da sessão rrweb
- * @param onTimeUpdate - Callback para atualização de tempo
- * @param overlays - Insights para exibir como overlays
- * @param currentTime - Tempo atual controlado externamente
- */
-export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTime }: Props) {
-  // Refs para elementos DOM
-  const containerRef = useRef<HTMLDivElement>(null); // Container onde o rrweb-player é renderizado
-  const wrapperRef = useRef<HTMLDivElement>(null);  // Wrapper responsável pelo layout e escala
-  
-  // Instância do Player rrweb
-  const [playerInstance, setPlayerInstance] = useState<RrwebPlayerLike | null>(null);
-  
-  // Estados de Controle de Reprodução
-  const [isPlaying, setIsPlaying] = useState(false); // Estado de play/pause
-  const [speed, setSpeed] = useState(1);             // Velocidade de reprodução (0.5x, 1x, 2x, 4x)
+const DEFAULT_WIDTH = 1280;
+const DEFAULT_HEIGHT = 720;
 
-  // Estados de Layout para "Fit Screen" (escala responsiva)
-  const [playerState, setPlayerState] = useState({
-      width: 0,      // Largura original do vídeo
-      height: 0,     // Altura original do vídeo
-      scale: 1,      // Fator de escala aplicado
-      marginLeft: 0, // Margem esquerda para centralização
-      marginTop: 0   // Margem superior para centralização
-    });
-  const handleTimeUpdate = useEffectEvent(onTimeUpdate);
-  const duration = Math.max(
-    0,
-    (events[events.length - 1]?.timestamp || 0) - (events[0]?.timestamp || 0)
-  );
+function formatTime(ms: number): string {
+  if (!ms || ms < 0) {
+    return '00:00';
+  }
 
-  /**
-   * 1. INICIALIZAÇÃO E CONFIGURAÇÃO DO PLAYER
-   *
-   * Este useEffect é executado quando os eventos mudam e configura o player rrweb:
-   * - Extrai metadados da sessão (dimensões, duração)
-   * - Instancia o player rrweb com configurações customizadas
-   * - Configura listeners de estado
-   * - Implementa lógica de "fit screen" responsiva
-   * - Inicia autoplay seguro (com delay para evitar bloqueios)
-   */
-  useEffect(() => {
-    // Validação: só inicializa se houver container e eventos
-    if (!containerRef.current || !events || events.length === 0) return;
-    
-    // Limpeza do container antes de criar nova instância
-    containerRef.current.innerHTML = '';
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
 
-    // Extração de metadados da sessão
-    // Tipo 4 = Meta event (contém dimensões da tela)
-    const metaEvent = events.find((e) => e.type === 4);
-    const videoW = metaEvent?.data?.width || 1024;  // Largura padrão se não encontrado
-    const videoH = metaEvent?.data?.height || 576;   // Altura padrão se não encontrado
+function getEventMetadata(events: RrwebSessionEvent[]): { width: number; height: number } {
+  const metaEvent = events.find((event) => event.type === 4);
 
-    // Instanciação do player rrweb usando a API oficial
-    const player = new rrwebPlayer({
-      target: containerRef.current,
-      props: {
-        events: events,
-        width: videoW,
-        height: videoH,
-        autoPlay: false,           // Não inicia automaticamente (controlamos manualmente)
-        showController: false,     // Desativa a UI nativa do rrweb (usamos nossa UI customizada)
-      },
-    });
+  return {
+    width: metaEvent?.data?.width ?? DEFAULT_WIDTH,
+    height: metaEvent?.data?.height ?? DEFAULT_HEIGHT,
+  };
+}
 
-    // Listener de estado oficial da documentação rrweb
-    // Atualiza o estado de play/pause quando o player muda internamente
-    player.addEventListener('ui-update-player-state', (event) => {
-        const state = event.payload; // 'playing', 'paused', ou 'ended'
-        setIsPlaying(state === 'playing');
-    });
+function fitStageSize(
+  availableWidth: number,
+  availableHeight: number,
+  aspectRatio: number
+): { width: number; height: number } {
+  if (availableWidth <= 0 || availableHeight <= 0 || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
+    return { width: 0, height: 0 };
+  }
 
-    // Armazena a instância do player para uso nos controles
-    setPlayerInstance(player);
+  const widthByHeight = availableHeight * aspectRatio;
 
-    // Autoplay seguro com delay de 500ms
-    // Navegadores podem bloquear autoplay imediato, então usamos um try-catch
-    setTimeout(() => {
-        try {
-            player.play(); // API oficial do rrweb-player
-            setIsPlaying(true);
-        } catch (e) {
-            console.warn("Autoplay bloqueado pelo navegador", e);
-        }
-    }, 500);
-
-    /**
-     * Lógica de "Fit Screen" (Escalamento Responsivo)
-     *
-     * Calcula a escala necessária para que o vídeo se ajuste ao container
-     * mantendo a proporção original (aspect ratio) e centralizando-o.
-     */
-    const updateDimensions = () => {
-        if (!wrapperRef.current) return;
-        
-        // Dimensões disponíveis no container
-        const availableW = wrapperRef.current.clientWidth;
-        const availableH = wrapperRef.current.clientHeight;
-        
-        // Calcula a escala mínima para caber no container (maintain aspect ratio)
-        const scale = Math.min(availableW / videoW, availableH / videoH);
-
-        // Atualiza o estado de layout
-        setPlayerState({
-            width: videoW,
-            height: videoH,
-            scale,
-            marginLeft: (availableW - (videoW * scale)) / 2,  // Centraliza horizontalmente
-            marginTop: (availableH - (videoH * scale)) / 2    // Centraliza verticalmente
-        });
+  if (widthByHeight <= availableWidth) {
+    return {
+      width: Math.max(1, Math.floor(widthByHeight)),
+      height: Math.max(1, Math.floor(availableHeight)),
     };
+  }
 
-    // Observa mudanças de tamanho do container para recalcular a escala
-    const resizeObserver = new ResizeObserver(updateDimensions);
-    if (wrapperRef.current) resizeObserver.observe(wrapperRef.current);
-    
-    // Atualização inicial após pequeno delay para garantir que o DOM está pronto
-    setTimeout(updateDimensions, 100);
+  return {
+    width: Math.max(1, Math.floor(availableWidth)),
+    height: Math.max(1, Math.floor(availableWidth / aspectRatio)),
+  };
+}
 
-    // Cleanup: desconecta o observer quando o componente desmonta ou eventos mudam
-    return () => resizeObserver.disconnect();
+export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTime }: Props) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<RrwebPlayerWithSizing | null>(null);
+  const layoutObserverRef = useRef<ResizeObserver | null>(null);
+  const playerResizeObserverRef = useRef<ResizeObserver | null>(null);
+  const stageSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+
+  const [playerError, setPlayerError] = useState<string | null>(null);
+  const [playerState, setPlayerState] = useState<'idle' | 'ready' | 'playing' | 'paused'>('idle');
+  const [speed, setSpeed] = useState(1);
+  const [stageSize, setStageSize] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+  }, [onTimeUpdate]);
+
+  const hasPlayableEvents = events.length >= 2;
+  const metadata = useMemo(() => getEventMetadata(events), [events]);
+  const metadataAspectRatio = useMemo(() => {
+    return metadata.width > 0 && metadata.height > 0 ? metadata.width / metadata.height : DEFAULT_WIDTH / DEFAULT_HEIGHT;
+  }, [metadata.height, metadata.width]);
+  const duration = useMemo(() => {
+    if (events.length < 2) {
+      return 0;
+    }
+
+    const firstTimestamp = events[0]?.timestamp ?? 0;
+    const lastTimestamp = events[events.length - 1]?.timestamp ?? 0;
+    return Math.max(0, lastTimestamp - firstTimestamp);
   }, [events]);
 
-  /**
-   * 2. LOOP DE SINCRONIZAÇÃO DE TEMPO
-   *
-   * Este useEffect sincroniza o tempo de reprodução do rrweb-player
-   * com componentes externos (painéis de insights e telemetria).
-   *
-   * IMPORTANTE: Removemos 'currentTime' e 'onTimeUpdate' das dependências
-   * para evitar que o loop reinicie a cada milissegundo, o que causaria
-   * problemas de performance e re-renders desnecessários.
-   */
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+  const destroyPlayer = useCallback(() => {
+    // A instância do rrweb precisa ser destruída explicitamente para não deixar iframe e listeners órfãos.
+    playerResizeObserverRef.current?.disconnect();
+    playerResizeObserverRef.current = null;
 
-    // Só executa o loop se o player estiver tocando e instanciado
-    if (isPlaying && playerInstance) {
-      /**
-       * Usamos setInterval em vez de requestAnimationFrame porque:
-       * - 50ms (20fps) é suave o suficiente para atualização de UI
-       * - Muito mais leve para o React (menos re-renders)
-       * - requestAnimationFrame causaria atualizações excessivas (60fps)
-       */
-      intervalId = setInterval(() => {
-        /**
-         * Acessa o motor interno do rrweb (replayer)
-         * Algumas versões usam .replayer, outras .getReplayer()
-         * Verificamos ambos para compatibilidade
-         */
-        const internalReplayer = playerInstance.replayer || (playerInstance.getReplayer && playerInstance.getReplayer());
+    if (playerRef.current) {
+      try {
+        playerRef.current.pause();
+      } catch {
+        // Cleanup defensivo: o destroy já cobre a liberação real.
+      }
 
-        if (internalReplayer) {
-          // Obtém o tempo atual de reprodução do rrweb
-          const time = internalReplayer.getCurrentTime();
-          
-          // Notifica o componente pai sobre a mudança de tempo
-          // Isso atualiza painéis de insights e telemetria
-          handleTimeUpdate(time);
-
-          // Verifica se a reprodução chegou ao fim
-          if (duration > 0 && time >= duration) {
-            setIsPlaying(false);
-            playerInstance.pause();
-          }
-        }
-      }, 50); // 50ms = 20 atualizações por segundo (balance ideal entre suavidez e performance)
-    }
-
-    // Cleanup: limpa o intervalo quando o componente desmonta ou estado muda
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [isPlaying, playerInstance, duration]); // `handleTimeUpdate` é um effect event e não entra nas dependências.
-
-  /**
-   * 3. FUNÇÕES DE CONTROLE DE REPRODUÇÃO
-   *
-   * Todas as funções utilizam a API oficial do rrweb-player
-   * conforme documentação da biblioteca.
-   */
-  
-  /**
-   * Alterna entre play e pause
-   * Usa os métodos play() e pause() da API oficial do rrweb-player
-   */
-  const togglePlay = () => {
-    if (!playerInstance) return;
-    
-    // Usa os métodos play() e pause() da API oficial
-    if (isPlaying) {
-      playerInstance.pause();
-    } else {
-      playerInstance.play();
-    }
-    
-    // Atualiza o estado visual imediatamente para feedback instantâneo no botão
-    // O listener 'ui-update-player-state' também atualizará, mas isso garante resposta rápida
-    setIsPlaying(!isPlaying);
-  };
-
-  /**
-   * Manipula a busca (seek) para um ponto específico da timeline
-   * Usa o método goto(time) da API oficial do rrweb-player
-   *
-   * @param e - Evento do input range
-   */
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = Number(e.target.value);
-    
-    // Atualiza o tempo visualmente imediatamente para feedback responsivo
-    onTimeUpdate(time);
-    
-    if (playerInstance) {
-      // API oficial: vai para o timestamp especificado
-      playerInstance.goto(time);
-      
-      // O método goto() às vezes pausa a reprodução, então forçamos play se estava tocando
-      if (isPlaying) {
-          playerInstance.play();
+      try {
+        playerRef.current.destroy?.();
+      } catch {
+        // Se a lib estiver em estado parcial, seguimos removendo o container manualmente.
       }
     }
-  };
 
-  /**
-   * Cicla entre velocidades de reprodução: 1x → 2x → 4x → 0.5x → 1x
-   * Usa o método setSpeed(number) da API oficial do rrweb-player
-   */
-  const cycleSpeed = () => {
-    if (!playerInstance) return;
-    
-    // Ciclo de velocidades: 1x → 2x → 4x → 0.5x → 1x (repete)
-    const nextSpeed = speed === 1 ? 2 : speed === 2 ? 4 : speed === 4 ? 0.5 : 1;
-    
-    // API oficial: define a velocidade de reprodução
-    playerInstance.setSpeed(nextSpeed);
-    setSpeed(nextSpeed);
-  };
+    playerRef.current = null;
 
-  /**
-   * Reinicia a reprodução do início
-   * Usa os métodos goto(0) e play() da API oficial
-   */
-  const restart = () => {
-    if(playerInstance) {
-        // API oficial: vai para o início (timestamp 0)
-        playerInstance.goto(0);
-        // API oficial: inicia a reprodução
-        playerInstance.play();
-        setIsPlaying(true);
+    if (containerRef.current) {
+      containerRef.current.innerHTML = '';
     }
-  };
+  }, []);
 
-  /**
-   * Formata milissegundos para o formato mm:ss
-   * Exemplo: 125000 → "02:05"
-   *
-   * @param ms - Tempo em milissegundos
-   * @returns String formatada no formato mm:ss
-   */
-  const formatTime = (ms: number) => {
-    if (!ms || ms < 0) return "00:00";
-    const totalSeconds = Math.floor(ms / 1000);
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
+  useLayoutEffect(() => {
+    if (!viewportRef.current || !hasPlayableEvents) {
+      return;
+    }
+
+    const measureStage = () => {
+      if (!viewportRef.current) {
+        return;
+      }
+
+      const { width, height } = viewportRef.current.getBoundingClientRect();
+      const nextSize = fitStageSize(width, height, metadataAspectRatio);
+
+      stageSizeRef.current = nextSize;
+      setStageSize((current) => {
+        if (current?.width === nextSize.width && current?.height === nextSize.height) {
+          return current;
+        }
+
+        return nextSize;
+      });
+    };
+
+    measureStage();
+
+    layoutObserverRef.current?.disconnect();
+    layoutObserverRef.current = new ResizeObserver(measureStage);
+    layoutObserverRef.current.observe(viewportRef.current);
+
+    return () => {
+      layoutObserverRef.current?.disconnect();
+      layoutObserverRef.current = null;
+    };
+  }, [hasPlayableEvents, metadataAspectRatio]);
+
+  useLayoutEffect(() => {
+    let cancelled = false;
+    destroyPlayer();
+
+    if (!containerRef.current || !hasPlayableEvents) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    onTimeUpdateRef.current(0);
+
+    try {
+      const initialStageSize = stageSizeRef.current ?? metadata;
+      const player = new rrwebPlayer({
+        target: containerRef.current,
+        props: {
+          events,
+          width: initialStageSize.width,
+          height: initialStageSize.height,
+          maxScale: 1,
+          autoPlay: false,
+          showController: false,
+          speed: 1,
+        },
+      }) as RrwebPlayerWithDestroy;
+
+      playerRef.current = player;
+
+      // O player expõe eventos de estado e tempo; usamos isso para sincronizar a UI sem polling local.
+      player.addEventListener('ui-update-player-state', (event: PlayerStatePayload) => {
+        const nextState = event?.payload;
+        setPlayerState(nextState === 'playing' ? 'playing' : nextState === 'paused' ? 'paused' : 'ready');
+      });
+
+      player.addEventListener('ui-update-current-time', (event: TimePayload) => {
+        const time = typeof event?.payload === 'number' ? event.payload : 0;
+        onTimeUpdateRef.current(time);
+      });
+
+      player.triggerResize();
+
+      playerResizeObserverRef.current?.disconnect();
+      playerResizeObserverRef.current = new ResizeObserver(() => {
+        // O rrweb recalcula o frame interno quando o card muda de tamanho.
+        player.triggerResize();
+      });
+
+      if (viewportRef.current) {
+        playerResizeObserverRef.current.observe(viewportRef.current);
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[VideoPlayer] replay instanciado', {
+          events: events.length,
+          width: metadata.width,
+          height: metadata.height,
+        });
+      }
+    } catch (error) {
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setPlayerError(error instanceof Error ? error.message : 'Não foi possível inicializar o replay.');
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      destroyPlayer();
+    };
+  }, [destroyPlayer, events, hasPlayableEvents, metadata]);
+
+  useLayoutEffect(() => {
+    if (!hasPlayableEvents || playerError || !stageSize || !playerRef.current) {
+      return;
+    }
+
+    const player = playerRef.current;
+    player.$set?.({ width: stageSize.width, height: stageSize.height });
+
+    const frame = window.requestAnimationFrame(() => {
+      player.triggerResize?.();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [hasPlayableEvents, playerError, stageSize]);
+
+  const togglePlay = useCallback(() => {
+    const player = playerRef.current;
+    if (!player || playerError) {
+      return;
+    }
+
+    if (playerState === 'playing') {
+      player.pause();
+      setPlayerState('paused');
+      return;
+    }
+
+    player.play();
+    setPlayerState('playing');
+  }, [playerError, playerState]);
+
+  const handleSeek = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const time = Number(event.target.value);
+      onTimeUpdateRef.current(time);
+
+      const player = playerRef.current;
+      if (player) {
+        // O goto recebe o time offset e, opcionalmente, continua tocando se o replay já estava em play.
+        player.goto(time, playerState === 'playing');
+      }
+    },
+    [playerState]
+  );
+
+  const cycleSpeed = useCallback(() => {
+    const player = playerRef.current;
+    if (!player || playerError) {
+      return;
+    }
+
+    const nextSpeed = speed === 1 ? 2 : speed === 2 ? 4 : speed === 4 ? 0.5 : 1;
+    player.setSpeed(nextSpeed);
+    setSpeed(nextSpeed);
+  }, [playerError, speed]);
+
+  const restart = useCallback(() => {
+    const player = playerRef.current;
+    if (!player || playerError) {
+      return;
+    }
+
+    player.goto(0, true);
+    setPlayerState('playing');
+    onTimeUpdateRef.current(0);
+  }, [playerError]);
+
+  const fallbackMessage = !hasPlayableEvents
+    ? 'A sessão precisa de pelo menos dois eventos rrweb para renderizar um replay funcional.'
+    : playerError;
+  const isInteractive = hasPlayableEvents && !playerError;
+  const showFallback = fallbackMessage !== null;
+  const renderedStageSize = stageSize ?? metadata;
 
   return (
-    <div className="w-full h-full flex flex-col bg-background">
-      
-      {/*
-        ÁREA DE VÍDEO (REPLAY)
-        Container responsável pela exibição da sessão gravada.
-        Usa refs para controle de escala e posicionamento.
-      */}
-      <div className="flex-1 relative overflow-hidden min-h-0 bg-black/50 mx-4 mt-4 border border-border rounded-t-lg" ref={wrapperRef}>
-        {/*
-          Div escalável que contém o player e os overlays
-          Aplica transformações CSS para "fit screen" responsivo
-        */}
-        <div
-          style={{
-              width: playerState.width,
-              height: playerState.height,
-              transform: `scale(${playerState.scale})`,           // Escala calculada
-              transformOrigin: 'top left',                        // Ponto de origem da escala
-              position: 'absolute',
-              left: playerState.marginLeft,                       // Centralização horizontal
-              top: playerState.marginTop,                         // Centralização vertical
-          }}
-        >
-            {/* Container onde o rrweb-player renderiza a sessão */}
-            <div ref={containerRef} className="w-full h-full shadow-2xl bg-white" />
-            
-            {/*
-              OVERLAYS DE INSIGHTS
-              Camada sobreposta que exibe bounding boxes e indicadores
-              visuais para anomalias detectadas pela IA.
-              pointer-events-none permite interações passarem através
-            */}
-            <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
-              {overlays.map((insight) => (
-                // Só renderiza se o insight tiver uma bounding box definida
-                insight.boundingBox && (
-                  <div
-                    key={insight.id}
-                    className={`absolute border-2 ${
-                      // Cor baseada na severidade: crítico = vermelho, aviso = amarelo
-                      insight.severity === 'critical' ? 'border-destructive bg-destructive/20' : 'border-yellow-500 bg-yellow-500/20'
-                    }`}
-                    style={{
-                      // Posicionamento baseado nas coordenadas da bounding box
-                      top: insight.boundingBox.top,
-                      left: insight.boundingBox.left,
-                      width: insight.boundingBox.width,
-                      height: insight.boundingBox.height,
-                    }}
-                  >
-                     {/*
-                       Label flutuante acima da bounding box
-                       Mostra o tipo de anomalia detectada
-                     */}
-                     <div className="absolute -top-6 left-0 flex items-center gap-1 bg-black/80 px-2 py-0.5 rounded text-[10px] text-white font-bold uppercase tracking-wider whitespace-nowrap">
-                        {insight.type}
-                     </div>
-                  </div>
-                )
-              ))}
+    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 shadow-2xl shadow-slate-950/40 backdrop-blur">
+      <div
+        ref={wrapperRef}
+        className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_45%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(2,6,23,0.96))] p-4 md:p-6"
+      >
+        <div ref={viewportRef} className="relative flex h-full min-h-0 min-w-0 w-full items-center justify-center overflow-hidden">
+          {showFallback ? (
+            <div className="flex min-h-[24rem] w-full items-center justify-center text-center">
+              <div className="max-w-md space-y-3 rounded-2xl border border-white/10 bg-slate-950/55 px-6 py-7 shadow-2xl shadow-slate-950/30 backdrop-blur">
+                <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.3em] text-sky-200">
+                  Replay indisponível
+                </div>
+                <h3 className="text-lg font-semibold text-white">Não há replay suficiente para renderizar a sessão.</h3>
+                <p className="text-sm leading-relaxed text-slate-300">
+                  {fallbackMessage ?? 'O arquivo enviado precisa conter um snapshot e eventos suficientes para o rrweb-player montar o stage.'}
+                </p>
+              </div>
             </div>
+          ) : (
+            <div
+              className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/20 shadow-2xl shadow-slate-950/40"
+              style={{
+                width: renderedStageSize.width,
+                height: renderedStageSize.height,
+              }}
+            >
+              <div ref={containerRef} className="h-full w-full" />
+              <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-slate-200 shadow-lg">
+                <span className="h-2 w-2 rounded-full bg-sky-400" />
+                {playerState === 'playing' ? 'Reproduzindo' : 'Reprise pronta'}
+              </div>
+              {overlays.length > 0 && (
+                <div className="pointer-events-none absolute right-4 top-4 rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-slate-200 shadow-lg">
+                  {overlays.length} overlay{overlays.length === 1 ? '' : 's'}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/*
-        PAINEL DE CONTROLE CUSTOMIZADO
-        UI customizada para controle de reprodução, substituindo
-        a UI nativa do rrweb-player para melhor integração visual.
-      */}
-      <div className="h-16 bg-card border-t border-border px-6 flex items-center gap-4 shrink-0 z-20 mx-4 rounded-b-lg mb-4 shadow-lg">
-        
-        {/* Botão Play/Pause - Controle principal de reprodução */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 bg-white/[0.03] px-4 py-3">
         <button
-            onClick={togglePlay}
-            className="w-10 h-10 rounded-full bg-primary hover:opacity-90 flex items-center justify-center text-primary-foreground transition-colors shadow-lg shrink-0"
+          type="button"
+          onClick={togglePlay}
+          disabled={!isInteractive}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-400 text-slate-950 transition-colors hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+          aria-label={playerState === 'playing' ? 'Pausar replay' : 'Reproduzir replay'}
         >
-            {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}
+          {playerState === 'playing' ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
         </button>
 
-        {/* Botão Reiniciar - Volta ao início da sessão */}
-        <button onClick={restart} className="text-muted-foreground hover:text-foreground p-2 transition-colors shrink-0">
-            <RotateCcw size={18} />
+        <button
+          type="button"
+          onClick={restart}
+          disabled={!isInteractive}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-slate-300 transition-colors hover:border-sky-400/40 hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:text-slate-500"
+          aria-label="Reiniciar replay"
+        >
+          <RotateCcw size={16} />
         </button>
 
-        {/* Display de Tempo - Mostra tempo atual e duração total */}
-        <div className="text-xs font-mono text-muted-foreground w-28 text-center bg-secondary py-1 rounded border border-border shrink-0">
-            {formatTime(currentTime)} / {formatTime(duration)}
+        <div className="min-w-[7rem] rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 font-mono text-xs text-slate-200">
+          {formatTime(currentTime)} / {formatTime(duration)}
         </div>
 
-        {/* Slider de Progresso - Permite navegação pela timeline */}
-        <div className="flex-1 group relative flex items-center w-full">
-            <input 
-                type="range" 
-                min={0} 
-                max={duration || 100} 
-                value={currentTime ?? 0} // Fix para erro de controlled/uncontrolled
-                onChange={handleSeek}
-                className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary hover:h-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
+        <div className="min-w-0 flex-1">
+          <input
+            type="range"
+            min={0}
+            max={duration || 1}
+            value={currentTime ?? 0}
+            onChange={handleSeek}
+            disabled={!isInteractive}
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-400 disabled:cursor-not-allowed"
+          />
         </div>
 
-        {/* Botão de Velocidade - Cicla entre velocidades de reprodução */}
         <button
-            onClick={cycleSpeed}
-            className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-border bg-secondary px-3 py-1.5 rounded border border-border w-16 justify-center transition-colors shrink-0"
+          type="button"
+          onClick={cycleSpeed}
+          disabled={!isInteractive}
+          className="inline-flex h-10 min-w-[4.75rem] items-center justify-center gap-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-xs font-semibold text-slate-200 transition-colors hover:border-sky-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:text-slate-500"
+          aria-label="Alterar velocidade de reprodução"
         >
-            <FastForward size={14} />
-            {speed}x
+          <FastForward size={14} />
+          {speed}x
         </button>
-
       </div>
     </div>
   );

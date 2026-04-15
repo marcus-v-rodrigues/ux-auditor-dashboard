@@ -3,6 +3,7 @@ import {
   authenticatedPost,
   AuthenticatedFetchError,
 } from "@/lib/authenticated-fetch";
+import type { SessionJobSubmissionResponse } from "@/types/dashboard";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,10 +16,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await authenticatedPost<{ session_uuid: string; message?: string }>(
-      "/ingest",
-      body
-    );
+    const response = await authenticatedPost<SessionJobSubmissionResponse>("/ingest", body);
 
     return NextResponse.json(response);
   } catch (error) {

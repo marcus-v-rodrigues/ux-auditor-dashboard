@@ -1,135 +1,65 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { UploadCloud, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
-import { Card, CardContent } from "@/components/ui/card";
-import type { RrwebSessionEvent } from '@/types/dashboard';
+import React, { useCallback, useState } from 'react';
+import { AlertCircle, CheckCircle, Loader2, UploadCloud } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import type { RrwebSessionEvent, SessionJobSubmissionResponse } from '@/types/dashboard';
+import { normalizeSessionJobSubmission } from '@/lib/normalization';
 
-/**
- * Interface de props para o componente FileUploader
- * @property onFileLoaded - Callback executado quando o arquivo é carregado e validado com sucesso.
- * Recebe um array de eventos rrweb e o session_uuid retornado pela API.
- */
 interface Props {
-  onFileLoaded: (events: RrwebSessionEvent[], sessionUuid: string) => void;
+  onFileLoaded: (events: RrwebSessionEvent[], submission: SessionJobSubmissionResponse) => void;
 }
 
-/**
- * Interface para resposta da API /ingest
- */
-interface IngestResponse {
-  session_uuid: string;
-  message?: string;
-}
-
-/**
- * Interface para erro da API
- */
-interface ApiError {
-  error: string;
-}
-
-/**
- * Estados possíveis do upload
- */
 type UploadState = 'idle' | 'validating' | 'uploading' | 'success' | 'error';
 
-/**
- * Componente responsável pelo upload de arquivos JSON contendo sessões gravadas pelo rrweb.
- *
- * Funcionalidades:
- * - Upload via clique no botão de seleção
- * - Upload via drag & drop (arrastar e soltar)
- * - Validação de formato JSON
- * - Validação de estrutura (deve ser um array de eventos)
- * - Integração com API /ingest para persistência
- * - Feedback visual de loading/erro/sucesso
- *
- * @param onFileLoaded - Função callback para processar os eventos carregados e o UUID da sessão
- */
 export function FileUploader({ onFileLoaded }: Props) {
   const [uploadState, setUploadState] = useState<UploadState>('idle');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
-  /**
-   * Limpa o estado de erro e reseta para o estado inicial
-   */
   const clearError = useCallback(() => {
     setErrorMessage('');
     setUploadState('idle');
   }, []);
 
-  /**
-   * Exibe uma mensagem de erro
-   */
   const showError = useCallback((message: string) => {
     setErrorMessage(message);
     setUploadState('error');
   }, []);
 
-  /**
-   * Manipula a seleção de arquivo através do input de arquivo.
-   * Extrai o primeiro arquivo selecionado e inicia o processamento.
-   *
-   * @param event - Evento de mudança do input HTML
-   */
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
-    processFile(file);
-    // Reset input para permitir selecionar o mesmo arquivo novamente
+    void processFile(file);
     event.target.value = '';
   };
 
-  /**
-   * Manipula o evento de drag over
-   */
   const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
     setIsDragging(true);
   };
 
-  /**
-   * Manipula o evento de drag leave
-   */
   const handleDragLeave = (event: React.DragEvent) => {
     event.preventDefault();
     setIsDragging(false);
   };
 
-  /**
-   * Manipula o evento de drop (arrastar e soltar) de arquivos.
-   * Previne o comportamento padrão do navegador e processa o arquivo.
-   *
-   * @param event - Evento de drag & drop do React
-   */
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     setIsDragging(false);
-    
+
     const file = event.dataTransfer.files?.[0];
-    if (!file) return;
-    
-    processFile(file);
+    if (!file) {
+      return;
+    }
+
+    void processFile(file);
   };
 
-  /**
-   * Processa o arquivo JSON carregado e envia para a API.
-   *
-   * Etapas:
-   * 1. Valida se o arquivo é do tipo JSON
-   * 2. Lê o conteúdo do arquivo usando FileReader
-   * 3. Faz o parse do JSON
-   * 4. Valida se a estrutura é um array (formato esperado do rrweb)
-   * 5. Envia para a API /ingest
-   * 6. Invoca o callback com os eventos e o session_uuid
-   *
-   * @param file - Arquivo a ser processado
-   */
   const processFile = async (file: File) => {
-    // Validação do tipo MIME e extensão do arquivo
     if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
       showError('Por favor, envie apenas arquivos .json');
       return;
@@ -138,37 +68,30 @@ export function FileUploader({ onFileLoaded }: Props) {
     setUploadState('validating');
     setErrorMessage('');
 
-    // Leitura assíncrona do arquivo
     const reader = new FileReader();
-    
-    reader.onload = async (e) => {
+
+    reader.onload = async (event) => {
       try {
-        // Parse do conteúdo JSON
-        const text = e.target?.result as string;
-        let json: unknown;
-        
+        const text = String(event.target?.result ?? '');
+
+        let parsed: unknown;
         try {
-          json = JSON.parse(text);
+          // Validamos o JSON localmente antes de bater na API para falhar rápido e com mensagem clara.
+          parsed = JSON.parse(text);
         } catch {
           showError('Erro ao processar o arquivo. Verifique se é um JSON válido.');
           return;
         }
-        
-        // Validação da estrutura: deve ser um array de eventos rrweb
-        if (!Array.isArray(json)) {
-          showError('Estrutura de JSON inválida. Esperado um array de eventos rrweb.');
+
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          showError('Estrutura de JSON inválida. Esperado um array não vazio de eventos rrweb.');
           return;
         }
 
-        if (json.length === 0) {
-          showError('O arquivo JSON está vazio. Por favor, forneça um array de eventos.');
-          return;
-        }
-
-        // Enviar para a API
         setUploadState('uploading');
-        
+
         try {
+          // O upload envia o payload bruto para a rota BFF, que mantém o contrato do backend isolado.
           const response = await fetch('/api/ingest', {
             method: 'POST',
             headers: {
@@ -177,42 +100,38 @@ export function FileUploader({ onFileLoaded }: Props) {
             body: text,
           });
 
-          const data: IngestResponse | ApiError = await response.json();
+          const data: unknown = await response.json().catch(() => ({}));
+          const submission = normalizeSessionJobSubmission(data);
 
-          if (!response.ok) {
-            const errorData = data as ApiError;
+          if (!response.ok || !submission) {
+            const message =
+              data && typeof data === 'object' && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+                ? (data as { error: string }).error
+                : `Erro ao enviar arquivo: ${response.status}`;
 
             if (response.status === 502 || response.status === 503) {
               showError('A API está indisponível. Tente novamente mais tarde.');
             } else if (response.status === 401 || response.status === 403) {
-              showError(errorData.error || 'Acesso negado. Verifique sua autenticação e permissões.');
+              showError(message || 'Acesso negado. Verifique sua autenticação e permissões.');
             } else {
-              showError(errorData.error || `Erro ao enviar arquivo: ${response.status}`);
+              showError(message);
             }
             return;
           }
 
-          const successData = data as IngestResponse;
-          
-          // Sucesso!
           setUploadState('success');
-          
-          // Invoca o callback com os eventos e o UUID da sessão
-          onFileLoaded(json, successData.session_uuid);
-          
+          onFileLoaded(parsed as RrwebSessionEvent[], submission);
         } catch (fetchError) {
-          console.error("Erro ao enviar para API", fetchError);
-          
-          // Verifica se é um erro de rede
+          console.error('Erro ao enviar para API', fetchError);
+
           if (fetchError instanceof TypeError && fetchError.message.includes('fetch')) {
             showError('Não foi possível conectar à API. Verifique sua conexão.');
           } else {
             showError('Erro inesperado ao enviar arquivo. Tente novamente.');
           }
         }
-        
-      } catch (err) {
-        console.error("Erro ao processar JSON", err);
+      } catch (error) {
+        console.error('Erro ao processar JSON', error);
         showError('Erro inesperado ao processar o arquivo.');
       }
     };
@@ -224,64 +143,41 @@ export function FileUploader({ onFileLoaded }: Props) {
     reader.readAsText(file);
   };
 
-  /**
-   * Renderiza o ícone apropriado baseado no estado
-   */
   const renderIcon = () => {
     switch (uploadState) {
       case 'validating':
       case 'uploading':
-        return <Loader2 className="h-8 w-8 text-primary animate-spin" />;
+        return <Loader2 className="h-8 w-8 animate-spin text-sky-300" />;
       case 'success':
-        return <CheckCircle className="h-8 w-8 text-green-500" />;
+        return <CheckCircle className="h-8 w-8 text-cyan-300" />;
       case 'error':
-        return <AlertCircle className="h-8 w-8 text-destructive" />;
+        return <AlertCircle className="h-8 w-8 text-red-300" />;
       default:
-        return <UploadCloud className="h-8 w-8 text-primary" />;
+        return <UploadCloud className="h-8 w-8 text-sky-300" />;
     }
   };
 
-  /**
-   * Renderiza a mensagem de status apropriada
-   */
   const renderStatusMessage = () => {
     switch (uploadState) {
       case 'validating':
-        return (
-          <p className="text-sm text-muted-foreground">
-            Validando arquivo...
-          </p>
-        );
+        return <p className="text-sm text-slate-300">Validando arquivo...</p>;
       case 'uploading':
-        return (
-          <p className="text-sm text-muted-foreground">
-            Enviando para o servidor...
-          </p>
-        );
+        return <p className="text-sm text-slate-300">Enviando sessão para ingestão assíncrona...</p>;
       case 'success':
-        return (
-          <p className="text-sm text-green-600 dark:text-green-400">
-            Arquivo enviado com sucesso!
-          </p>
-        );
+        return <p className="text-sm text-cyan-300">Sessão enviada. O worker irá processar em segundo plano.</p>;
       case 'error':
         return (
           <div className="text-center">
-            <p className="text-sm text-destructive mb-2">
-              {errorMessage}
-            </p>
-            <button
-              onClick={clearError}
-              className="text-sm text-primary hover:underline"
-            >
+            <p className="mb-2 text-sm text-red-200">{errorMessage}</p>
+            <button onClick={clearError} className="text-sm text-sky-300 hover:underline">
               Tentar novamente
             </button>
           </div>
         );
       default:
         return (
-          <p className="mb-6 text-sm text-muted-foreground">
-            Arraste seu arquivo <code className="bg-secondary px-1 py-0.5 rounded">.json</code> aqui ou clique para selecionar.
+          <p className="mb-6 text-sm text-slate-300">
+            Arraste seu arquivo <code className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-slate-100">.json</code> aqui ou clique para selecionar.
           </p>
         );
     }
@@ -290,44 +186,39 @@ export function FileUploader({ onFileLoaded }: Props) {
   const isProcessing = uploadState === 'validating' || uploadState === 'uploading';
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-background p-6">
-      <Card className="w-full max-w-lg border-border bg-card/50">
-        <CardContent className="">
-          <div 
-            className={`
-              flex flex-col items-center justify-center rounded-lg border-2 border-dashed 
-              px-6 py-10 text-center transition-colors
-              ${isDragging ? 'border-primary bg-primary/5' : 'border-border'}
-              ${isProcessing ? 'cursor-not-allowed' : 'hover:bg-secondary/50 cursor-pointer'}
-              ${uploadState === 'error' ? 'border-destructive/50 bg-destructive/5' : ''}
-            `}
+    <div className="w-full flex justify-center">
+      <Card className="w-full max-w-2xl border-white/10 bg-white/[0.04] shadow-2xl shadow-slate-950/30 backdrop-blur">
+        <CardContent className="p-6 md:p-8">
+          <div
+            className={[
+              'flex flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-12 text-center transition-colors',
+              isDragging ? 'border-sky-400 bg-sky-400/10' : 'border-white/10 bg-white/[0.03]',
+              isProcessing ? 'cursor-not-allowed' : 'cursor-pointer hover:border-sky-400/40 hover:bg-white/[0.05]',
+              uploadState === 'error' ? 'border-red-400/50 bg-red-500/10' : '',
+            ].join(' ')}
             onDragOver={isProcessing ? undefined : handleDragOver}
             onDragLeave={isProcessing ? undefined : handleDragLeave}
             onDrop={isProcessing ? undefined : handleDrop}
           >
-            <div className="mb-4 rounded-full bg-secondary p-4">
-              {renderIcon()}
-            </div>
-            
-            <h3 className="mb-2 text-lg font-semibold text-foreground">
-              Upload de Sessão (JSON)
-            </h3>
-            
+            <div className="mb-4 rounded-full border border-white/10 bg-slate-900/70 p-4 shadow-lg">{renderIcon()}</div>
+
+            <h3 className="mb-2 text-lg font-semibold text-white">Upload de sessão rrweb</h3>
+
             {renderStatusMessage()}
 
             {uploadState === 'idle' && (
               <>
-                <label 
-                  htmlFor="file-upload" 
-                  className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-colors"
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer rounded-md bg-sky-400 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-sky-300"
                 >
                   Selecionar Arquivo
                 </label>
-                <input 
-                  id="file-upload" 
-                  type="file" 
-                  accept=".json" 
-                  className="hidden" 
+                <input
+                  id="file-upload"
+                  type="file"
+                  accept=".json"
+                  className="hidden"
                   onChange={handleFileChange}
                   disabled={isProcessing}
                 />
@@ -335,9 +226,9 @@ export function FileUploader({ onFileLoaded }: Props) {
             )}
 
             {isProcessing && (
-              <div className="mt-2">
-                <div className="h-1 w-48 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-full bg-primary animate-pulse w-full" />
+              <div className="mt-2 w-full max-w-xs">
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full w-full animate-pulse bg-gradient-to-r from-sky-400 to-cyan-300" />
                 </div>
               </div>
             )}

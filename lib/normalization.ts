@@ -1,67 +1,48 @@
 import type {
   BoundingBox,
   InsightEvent,
-  InsightEventPayload,
-  InsightSeverity,
-  InsightType,
-  IntentAnalysis,
-  IntentAnalysisPayload,
-  PsychometricData,
-  PsychometricDataPayload,
-  SessionStatsPayload,
-  TelemetryLog,
-  TelemetryLogPayload,
+  JobStatus,
+  ModernIntentAnalysis,
+  ModernPsychometrics,
+  SessionJobSubmissionResponse,
+  SessionJobStatusResponse,
+  SessionProcessResponse,
+  SessionProcessStats,
 } from "@/types/dashboard";
 
 type RecordLike = Record<string, unknown>;
 
 function isRecord(value: unknown): value is RecordLike {
-  return value !== null && typeof value === "object";
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-/**
- * Converte qualquer valor numérico válido para `number`.
- * Valores ausentes, nulos ou `NaN` caem no fallback.
- */
+function cloneRecord(value: RecordLike): RecordLike {
+  return { ...value };
+}
+
 export function safeNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-/**
- * Garante que o valor seja uma string; caso contrário, usa o fallback.
- */
 export function safeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
-/**
- * Normaliza arrays heterogêneos para uma lista de strings não vazias.
- */
 export function safeStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
 }
 
-/**
- * Normaliza um valor percentual para a faixa 0-100.
- */
-export function safePercent(value: unknown, fallback = 0): number {
-  const numeric = safeNumber(value, fallback);
-  return Math.min(100, Math.max(0, numeric));
+export function safeUnknownArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
-/**
- * Remove espaços e troca textos vazios pelo fallback informado.
- */
 export function normalizeText(value: unknown, fallback: string): string {
   const text = safeString(value, "").trim();
   return text.length > 0 ? text : fallback;
 }
 
-/**
- * Normaliza a bounding box recebida da API para um shape totalmente numérico.
- */
 export function normalizeBoundingBox(value: unknown): BoundingBox | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -75,31 +56,19 @@ export function normalizeBoundingBox(value: unknown): BoundingBox | undefined {
   };
 }
 
-function normalizeInsightType(value: unknown): InsightType {
-  const type = safeString(value, "usability");
-  return type === "accessibility" || type === "usability" || type === "heuristic"
-    ? type
-    : "usability";
+function normalizeInsightType(value: unknown): string {
+  return normalizeText(value, "usability");
 }
 
-function normalizeInsightSeverity(value: unknown): InsightSeverity {
-  const severity = safeString(value, "medium");
-  return severity === "low" || severity === "medium" || severity === "critical"
-    ? severity
-    : "medium";
+function normalizeInsightSeverity(value: unknown): string {
+  return normalizeText(value, "medium");
 }
 
-/**
- * Normaliza um insight parcial da API para o contrato usado pela UI.
- */
-export function normalizeInsightEvent(
-  value: InsightEventPayload | unknown,
-  index: number
-): InsightEvent {
+export function normalizeInsightEvent(value: unknown, index: number): InsightEvent {
   const insight = isRecord(value) ? value : {};
 
   return {
-    id: safeString(insight.id, `insight-${index}`),
+    id: normalizeText(insight.id, `insight-${index}`),
     timestamp: safeNumber(insight.timestamp, 0),
     type: normalizeInsightType(insight.type),
     severity: normalizeInsightSeverity(insight.severity),
@@ -108,65 +77,122 @@ export function normalizeInsightEvent(
   };
 }
 
-/**
- * Normaliza um log de telemetria parcial para o formato exibido no painel.
- */
-export function normalizeTelemetryLog(
-  value: TelemetryLogPayload | unknown,
-  index: number
-): TelemetryLog {
-  const log = isRecord(value) ? value : {};
+export function normalizeInsightEvents(value: unknown): InsightEvent[] {
+  return Array.isArray(value) ? value.map((item, index) => normalizeInsightEvent(item, index)) : [];
+}
+
+export function normalizeSessionProcessStats(value: unknown): SessionProcessStats {
+  const stats = isRecord(value) ? value : {};
 
   return {
-    id: safeString(log.id, `log-${index}`),
-    timestamp: safeNumber(log.timestamp, 0),
-    eventType: normalizeText(log.eventType, "desconhecido"),
-    details: normalizeText(log.details, "Detalhes indisponíveis."),
+    total_events: safeNumber(stats.total_events, 0),
+    kinematic_vectors: safeNumber(stats.kinematic_vectors, 0),
+    user_actions: safeNumber(stats.user_actions, 0),
+    ml_insights: safeNumber(stats.ml_insights, 0),
+    rage_clicks: safeNumber(stats.rage_clicks, 0),
   };
 }
 
-/**
- * Normaliza a coleção de logs da resposta do backend.
- */
-export function normalizeTelemetryLogs(
-  value: SessionStatsPayload | null | undefined
-): TelemetryLog[] {
-  const actions = value?.user_actions;
-  return Array.isArray(actions) ? actions.map((action, index) => normalizeTelemetryLog(action, index)) : [];
+export function normalizeModernPsychometrics(value: unknown): ModernPsychometrics | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const psychometrics = cloneRecord(value);
+  const goalHypothesis = isRecord(psychometrics.goal_hypothesis)
+    ? cloneRecord(psychometrics.goal_hypothesis)
+    : undefined;
+
+  return {
+    ...psychometrics,
+    overall_confidence:
+      typeof psychometrics.overall_confidence === "number"
+        ? psychometrics.overall_confidence
+        : undefined,
+    goal_hypothesis: goalHypothesis,
+    friction_points: safeUnknownArray(psychometrics.friction_points),
+    progress_signals: safeUnknownArray(psychometrics.progress_signals),
+  };
 }
 
-/**
- * Normaliza os dados psicométricos recebidos pela API.
- */
-export function normalizePsychometricData(
-  value: PsychometricDataPayload | PsychometricData | null | undefined
-): PsychometricData | null {
+export function normalizeModernIntentAnalysis(value: unknown): ModernIntentAnalysis | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const intentAnalysis = cloneRecord(value);
+  const goalHypothesis = isRecord(intentAnalysis.goal_hypothesis)
+    ? cloneRecord(intentAnalysis.goal_hypothesis)
+    : undefined;
+
+  return {
+    ...intentAnalysis,
+    overall_confidence:
+      typeof intentAnalysis.overall_confidence === "number"
+        ? intentAnalysis.overall_confidence
+        : undefined,
+    goal_hypothesis: goalHypothesis,
+    hypotheses: safeUnknownArray(intentAnalysis.hypotheses),
+  };
+}
+
+export function normalizeStructuredAnalysis(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? cloneRecord(value) : null;
+}
+
+export function normalizeSessionProcessResponse(value: unknown): SessionProcessResponse {
+  const response = isRecord(value) ? value : {};
+
+  return {
+    session_uuid: normalizeText(response.session_uuid, ""),
+    user_id: normalizeText(response.user_id, ""),
+    narrative: normalizeText(response.narrative, ""),
+    psychometrics: normalizeModernPsychometrics(response.psychometrics) ?? {},
+    intent_analysis: normalizeModernIntentAnalysis(response.intent_analysis) ?? {},
+    insights: normalizeInsightEvents(response.insights),
+    stats: normalizeSessionProcessStats(response.stats),
+    semantic_bundle: response.semantic_bundle,
+    llm_output: response.llm_output,
+    structured_analysis: normalizeStructuredAnalysis(response.structured_analysis),
+  };
+}
+
+export function normalizeSessionJobSubmission(
+  value: unknown
+): SessionJobSubmissionResponse | null {
   if (!isRecord(value)) {
     return null;
   }
 
   return {
-    engagement_score: safePercent(value.engagement_score, 0),
-    frustration_score: safePercent(value.frustration_score, 0),
-    confusion_score: safePercent(value.confusion_score, 0),
-    behavior_patterns: safeStringArray(value.behavior_patterns),
+    status: "queued",
+    message: normalizeText(value.message, "Eventos da sessão enfileirados para processamento assíncrono"),
+    session_uuid: normalizeText(value.session_uuid, ""),
+    user_id: normalizeText(value.user_id, ""),
   };
 }
 
-/**
- * Normaliza a análise de intenção recebida pela API.
- */
-export function normalizeIntentAnalysisData(
-  value: IntentAnalysisPayload | IntentAnalysis | null | undefined
-): IntentAnalysis | null {
+export function normalizeSessionJobStatus(value: unknown): SessionJobStatusResponse | null {
   if (!isRecord(value)) {
     return null;
   }
 
+  const rawStatus = normalizeText(value.status, "queued").trim().toLowerCase();
+  const normalizedStatus: JobStatus =
+    rawStatus === "processing" || rawStatus === "completed" || rawStatus === "failed"
+      ? rawStatus
+      : "queued";
+
   return {
-    primary_intent: normalizeText(value.primary_intent, "Não identificado"),
-    secondary_intents: safeStringArray(value.secondary_intents),
-    success_probability: safeNumber(value.success_probability, 0),
-    barriers: safeStringArray(value.barriers),
+    session_uuid: normalizeText(value.session_uuid, ""),
+    user_id: normalizeText(value.user_id, ""),
+    status: normalizedStatus,
+    raw_status: rawStatus,
+    processing_error:
+      typeof value.processing_error === "string" ? value.processing_error : null,
+    result:
+      value.result === null || value.result === undefined
+        ? null
+        : normalizeSessionProcessResponse(value.result),
   };
 }
