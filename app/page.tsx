@@ -524,7 +524,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <main className="grid flex-1 min-h-0 gap-4 p-4 md:p-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <main className="grid flex-1 min-h-0 gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,2.2fr)_minmax(360px,1fr)]">
         <section className="flex min-h-0 min-w-0 flex-col gap-4">
           <Card className="flex min-h-0 flex-col py-0 overflow-hidden border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30">
             <CardHeader className="border-b border-white/10 !py-6">
@@ -546,8 +546,10 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+        </section>
 
-          <Card className="border-white/10 bg-white/[0.03] shadow-lg shadow-slate-950/20">
+        <section className="flex min-h-0 min-w-0 flex-col lg:pt-0">
+          <Card className="h-full min-h-0 border-white/10 bg-white/[0.03] shadow-lg shadow-slate-950/20">
             <CardHeader className="border-b border-white/10 pb-4">
               <CardTitle className="text-sm font-semibold uppercase tracking-wider text-white">
                 Estado da ingestão
@@ -574,7 +576,7 @@ export default function DashboardPage() {
           </Card>
         </section>
 
-        <section className="min-w-0">
+        <section className="min-w-0 lg:col-span-2">
           <InsightsPanel
             result={analysisReady ? analysisResult : null}
             currentTime={currentTime}

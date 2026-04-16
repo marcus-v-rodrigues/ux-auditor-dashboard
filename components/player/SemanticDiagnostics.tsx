@@ -93,8 +93,8 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
   );
 
   return (
-    <div className="space-y-4">
-      <Card className="border-border/70 bg-card/80 shadow-sm">
+    <div className="w-full min-w-0 space-y-4">
+      <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
         <CardHeader className="border-b border-border/60 pb-4">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
             <BrainCircuit className="h-4 w-4 text-sky-300" />
@@ -102,12 +102,12 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <div className="min-w-0 rounded-xl border border-border/60 bg-background/60 p-3">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Psicometria</p>
               <p className="mt-1 text-lg font-semibold text-foreground">{confidence}</p>
             </div>
-            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <div className="min-w-0 rounded-xl border border-border/60 bg-background/60 p-3">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Intenção</p>
               <p className="mt-1 text-lg font-semibold text-foreground">{intentConfidence}</p>
             </div>
@@ -124,15 +124,15 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
             </div>
           )}
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="space-y-3">
+          <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+            <div className="min-w-0 space-y-3">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 <Target className="h-3.5 w-3.5" />
                 Psychometrics.goal_hypothesis
               </div>
               {renderObjectPreview(psychometrics?.goal_hypothesis)}
             </div>
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 <Target className="h-3.5 w-3.5" />
                 intent_analysis.goal_hypothesis
@@ -143,8 +143,8 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="border-border/70 bg-card/80 shadow-sm">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+        <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
               <ListChecks className="h-4 w-4 text-sky-300" />
@@ -154,7 +154,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
           <CardContent className="pt-4">{renderList(frictionPoints)}</CardContent>
         </Card>
 
-        <Card className="border-border/70 bg-card/80 shadow-sm">
+        <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
               <CheckCircle2 className="h-4 w-4 text-sky-300" />
@@ -165,7 +165,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
         </Card>
       </div>
 
-      <Card className="border-border/70 bg-card/80 shadow-sm">
+      <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
               <Badge variant="outline" className="h-6 px-2 text-[10px]">
@@ -178,7 +178,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
       </Card>
 
       {structuredAnalysis && (
-        <Card className="border-border/70 bg-card/80 shadow-sm">
+        <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
               <BrainCircuit className="h-4 w-4 text-sky-300" />

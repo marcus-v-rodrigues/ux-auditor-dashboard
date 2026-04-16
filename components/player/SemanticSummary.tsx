@@ -66,7 +66,7 @@ export function SemanticSummary({
   );
 
   return (
-    <Card className="border-border/70 bg-card/80 shadow-sm">
+    <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
       <CardHeader className="border-b border-border/60 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -99,7 +99,7 @@ export function SemanticSummary({
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <div className="rounded-xl border border-border/60 bg-background/60 p-3">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Confiança</p>
             <p className="mt-1 text-lg font-semibold text-foreground">{confidence}</p>
@@ -127,7 +127,7 @@ export function SemanticSummary({
         </div>
 
         {goalSummary && (
-          <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+          <div className="min-w-0 rounded-xl border border-border/60 bg-background/60 p-4">
             <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
               <SquareActivity className="h-3.5 w-3.5 text-sky-300" />
               Hipótese principal

@@ -130,7 +130,7 @@ export function InsightsPanel({
   const llmOutput = result?.llm_output;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30 backdrop-blur">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30 backdrop-blur">
       <div className="border-b border-white/10 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -177,8 +177,8 @@ export function InsightsPanel({
         )}
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="space-y-4 p-5">
+      <ScrollArea className="min-h-0 min-w-0 w-full flex-1">
+        <div className="min-w-0 w-full space-y-4 p-5">
           {processingStatus === "queued" || processingStatus === "processing" ? (
             renderSkeleton()
           ) : (
@@ -192,7 +192,7 @@ export function InsightsPanel({
 
               <SemanticDiagnostics result={result} />
 
-              <Card className="border-border/70 bg-card/80 shadow-sm">
+              <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
                 <CardHeader className="border-b border-border/60 pb-4">
                   <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
                     <Clock3 className="h-4 w-4 text-sky-400" />
@@ -245,7 +245,7 @@ export function InsightsPanel({
               </Card>
 
               {structuredAnalysis ? (
-                <Card className="border-border/70 bg-card/80 shadow-sm">
+                <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
                   <CardHeader className="border-b border-border/60 pb-4">
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
                       <Layers3 className="h-4 w-4 text-sky-400" />
@@ -264,7 +264,7 @@ export function InsightsPanel({
               ) : null}
 
               {semanticBundle ? (
-                <Card className="border-border/70 bg-card/80 shadow-sm">
+                <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
                   <CardHeader className="border-b border-border/60 pb-4">
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
                       <FileText className="h-4 w-4 text-sky-400" />
@@ -272,7 +272,7 @@ export function InsightsPanel({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <pre className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
+                    <pre className="w-full max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
                       {JSON.stringify(semanticBundle, null, 2)}
                     </pre>
                   </CardContent>
@@ -280,7 +280,7 @@ export function InsightsPanel({
               ) : null}
 
               {llmOutput ? (
-                <Card className="border-border/70 bg-card/80 shadow-sm">
+                <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
                   <CardHeader className="border-b border-border/60 pb-4">
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
                       <FileText className="h-4 w-4 text-sky-400" />
@@ -288,7 +288,7 @@ export function InsightsPanel({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <pre className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
+                    <pre className="w-full max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
                       {JSON.stringify(llmOutput, null, 2)}
                     </pre>
                   </CardContent>
