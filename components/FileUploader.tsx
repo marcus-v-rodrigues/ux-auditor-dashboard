@@ -189,7 +189,7 @@ export function FileUploader({ onFileLoaded }: Props) {
 
   return (
     <div className="w-full flex justify-center">
-      <Card className="w-full max-w-2xl border-white/10 bg-white/[0.04] shadow-2xl shadow-slate-950/30 backdrop-blur">
+      <Card className="w-full max-w-2xl py-0 border-white/10 bg-white/[0.04] shadow-2xl shadow-slate-950/30 backdrop-blur">
         <CardContent className="p-6 md:p-8">
           <div
             className={[
@@ -204,7 +204,7 @@ export function FileUploader({ onFileLoaded }: Props) {
           >
             <div className="mb-4 rounded-full border border-white/10 bg-slate-900/70 p-4 shadow-lg">{renderIcon()}</div>
 
-            <h3 className="mb-2 text-lg font-semibold text-white">Upload de sessão rrweb</h3>
+            <h3 className="mb-2 text-lg font-semibold text-white">Upload de sessão</h3>
 
             {renderStatusMessage()}
 

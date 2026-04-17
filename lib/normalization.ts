@@ -4,6 +4,7 @@ import type {
   JobStatus,
   IntentAnalysis,
   Psychometrics,
+  SessionHistoryItem,
   SessionJobSubmissionResponse,
   SessionJobStatusResponse,
   SessionProcessResponse,
@@ -215,4 +216,42 @@ export function normalizeSessionJobStatus(value: unknown): SessionJobStatusRespo
         ? null
         : normalizeSessionProcessResponse(value.result),
   };
+}
+
+export function normalizeSessionHistoryItem(value: unknown): SessionHistoryItem | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const rawStatus = normalizeText(value.status, "queued").trim().toLowerCase();
+  const normalizedStatus: JobStatus =
+    rawStatus === "processing" || rawStatus === "completed" || rawStatus === "failed"
+      ? rawStatus
+      : "queued";
+
+  return {
+    session_uuid: normalizeText(value.session_uuid, ""),
+    status: normalizedStatus,
+    created_at: normalizeText(value.created_at, ""),
+    narrative_preview:
+      typeof value.narrative_preview === "string" && value.narrative_preview.trim().length > 0
+        ? value.narrative_preview.trim()
+        : null,
+  };
+}
+
+export function normalizeSessionHistoryList(value: unknown): SessionHistoryItem[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeSessionHistoryItem(item))
+      .filter((item): item is SessionHistoryItem => item !== null && item.session_uuid.length > 0);
+  }
+
+  if (isRecord(value) && Array.isArray(value.sessions)) {
+    return value.sessions
+      .map((item) => normalizeSessionHistoryItem(item))
+      .filter((item): item is SessionHistoryItem => item !== null && item.session_uuid.length > 0);
+  }
+
+  return [];
 }

@@ -74,6 +74,33 @@ export interface SessionJobStatusResponse {
   result: SessionProcessResponse | null;
 }
 
+export interface SessionHistoryItem {
+  session_uuid: string;
+  status: JobStatus;
+  created_at: string;
+  narrative_preview: string | null;
+}
+
+export interface SessionRawMetadata {
+  session_meta?: Record<string, unknown>;
+  privacy?: Record<string, unknown>;
+  capture_config?: Record<string, unknown>;
+  axe_preliminary_analysis?: Record<string, unknown>;
+  page_semantics?: Record<string, unknown>;
+  interaction_summary?: Record<string, unknown>;
+  ui_dynamics?: Record<string, unknown>;
+  heuristic_evidence?: Record<string, unknown>;
+  ux_markers?: Record<string, unknown>[];
+}
+
+export interface SessionRawResponse {
+  user_id: string;
+  session_uuid: string;
+  events: RrwebSessionEvent[];
+  metadata: SessionRawMetadata;
+  timestamp: string;
+}
+
 export interface TelemetryLog {
   id: string;
   timestamp: number;
