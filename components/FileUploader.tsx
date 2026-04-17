@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle, Loader2, UploadCloud } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { RrwebSessionEvent, SessionJobSubmissionResponse } from '@/types/dashboard';
 import { normalizeSessionJobSubmission } from '@/lib/normalization';
+import { extractRrwebEvents } from '@/lib/rrweb';
 
 interface Props {
   onFileLoaded: (events: RrwebSessionEvent[], submission: SessionJobSubmissionResponse) => void;
@@ -83,15 +84,16 @@ export function FileUploader({ onFileLoaded }: Props) {
           return;
         }
 
-        if (!Array.isArray(parsed) || parsed.length === 0) {
-          showError('Estrutura de JSON inválida. Esperado um array não vazio de eventos rrweb.');
+        const rrwebEvents = extractRrwebEvents(parsed);
+        if (!rrwebEvents) {
+          showError('Estrutura de JSON inválida. Esperado um objeto com rrweb.events não vazio.');
           return;
         }
 
         setUploadState('uploading');
 
         try {
-          // O upload envia o payload bruto para a rota BFF, que mantém o contrato do backend isolado.
+          // O upload envia o envelope bruto para preservar os metadados da sessão.
           const response = await fetch('/api/ingest', {
             method: 'POST',
             headers: {
@@ -120,7 +122,7 @@ export function FileUploader({ onFileLoaded }: Props) {
           }
 
           setUploadState('success');
-          onFileLoaded(parsed as RrwebSessionEvent[], submission);
+          onFileLoaded(rrwebEvents as RrwebSessionEvent[], submission);
         } catch (fetchError) {
           console.error('Erro ao enviar para API', fetchError);
 

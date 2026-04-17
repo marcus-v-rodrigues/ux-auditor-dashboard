@@ -3,15 +3,19 @@ import {
   authenticatedPost,
   AuthenticatedFetchError,
 } from "@/lib/authenticated-fetch";
+import { isRrwebEnvelope } from "@/lib/rrweb";
 import type { SessionJobSubmissionResponse } from "@/types/dashboard";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!Array.isArray(body)) {
+    if (!isRrwebEnvelope(body)) {
       return NextResponse.json(
-        { error: "Corpo da requisição inválido. Era esperado um array de eventos rrweb." },
+        {
+          error:
+            "Corpo da requisição inválido. Era esperado um objeto com rrweb.events não vazio.",
+        },
         { status: 400 }
       );
     }
