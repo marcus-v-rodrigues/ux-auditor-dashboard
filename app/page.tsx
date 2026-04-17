@@ -576,7 +576,7 @@ export default function DashboardPage() {
           </Card>
         </section>
 
-        <section className="min-w-0 lg:col-span-2">
+        <section className="flex min-h-0 min-w-0 flex-col lg:col-span-2">
           <InsightsPanel
             result={analysisReady ? analysisResult : null}
             currentTime={currentTime}

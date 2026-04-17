@@ -1,4 +1,3 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,9 +7,10 @@ import type {
   SessionProcessResponse,
 } from "@/types/dashboard";
 import { safeNumber, safeString } from "@/lib/normalization";
-import { AlertTriangle, BarChart3, Clock3, FileText, Layers3 } from "lucide-react";
+import { AlertTriangle, BarChart3, Clock3, Layers3 } from "lucide-react";
 import { SemanticSummary } from "./SemanticSummary";
 import { SemanticDiagnostics } from "./SemanticDiagnostics";
+import { JsonDataCard } from "./JsonDataCard";
 
 interface Props {
   result?: SessionProcessResponse | null;
@@ -130,7 +130,7 @@ export function InsightsPanel({
   const llmOutput = result?.llm_output;
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30 backdrop-blur">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30 backdrop-blur">
       <div className="border-b border-white/10 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -177,8 +177,8 @@ export function InsightsPanel({
         )}
       </div>
 
-      <ScrollArea className="min-h-0 min-w-0 w-full flex-1">
-        <div className="min-w-0 w-full space-y-4 p-5">
+      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
           {processingStatus === "queued" || processingStatus === "processing" ? (
             renderSkeleton()
           ) : (
@@ -263,41 +263,27 @@ export function InsightsPanel({
                 </Card>
               ) : null}
 
-              {semanticBundle ? (
-                <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
-                  <CardHeader className="border-b border-border/60 pb-4">
-                    <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
-                      <FileText className="h-4 w-4 text-sky-400" />
-                      Semantic bundle
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <pre className="w-full max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
-                      {JSON.stringify(semanticBundle, null, 2)}
-                    </pre>
-                  </CardContent>
-                </Card>
-              ) : null}
+              <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                {semanticBundle ? (
+                  <JsonDataCard
+                    title="Semantic bundle"
+                    filename="semantic-bundle.json"
+                    value={semanticBundle}
+                  />
+                ) : null}
 
-              {llmOutput ? (
-                <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
-                  <CardHeader className="border-b border-border/60 pb-4">
-                    <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
-                      <FileText className="h-4 w-4 text-sky-400" />
-                      Saída bruta do LLM
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <pre className="w-full max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background/70 p-3 text-[11px] leading-relaxed text-slate-200">
-                      {JSON.stringify(llmOutput, null, 2)}
-                    </pre>
-                  </CardContent>
-                </Card>
-              ) : null}
+                {llmOutput ? (
+                  <JsonDataCard
+                    title="Saída bruta do LLM"
+                    filename="llm-output.json"
+                    value={llmOutput}
+                  />
+                ) : null}
+              </div>
             </>
           )}
         </div>
-      </ScrollArea>
+      </CardContent>
     </div>
   );
 }

@@ -323,7 +323,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 shadow-2xl shadow-slate-950/40 backdrop-blur">
       <div
         ref={wrapperRef}
-        className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_45%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(2,6,23,0.96))] p-4 md:p-6"
+        className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_45%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(2,6,23,0.96))] p-2"
       >
         <div ref={viewportRef} className="relative flex h-full min-h-0 min-w-0 w-full items-center justify-center overflow-hidden">
           {showFallback ? (
