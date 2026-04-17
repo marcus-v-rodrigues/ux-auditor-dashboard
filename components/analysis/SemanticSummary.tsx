@@ -50,6 +50,12 @@ export function SemanticSummary({
   processingError,
   onRetryStatus,
 }: SemanticSummaryProps) {
+  const structuredAnalysis =
+    result?.structured_analysis &&
+    typeof result.structured_analysis === "object" &&
+    !Array.isArray(result.structured_analysis)
+      ? (result.structured_analysis as Record<string, unknown>)
+      : undefined;
   const narrative = normalizeText(result?.narrative, "");
   const hasNarrative = narrative.length > 0;
   const stats = result?.stats;
@@ -58,12 +64,14 @@ export function SemanticSummary({
   const userActions = safeNumber(stats?.user_actions, 0);
   const mlInsights = safeNumber(stats?.ml_insights, 0);
   const rageClicks = safeNumber(stats?.rage_clicks, 0);
-  const confidence = safeNumber(result?.psychometrics?.overall_confidence, 0);
-  const goalSummary = normalizeText(
-    result?.psychometrics?.goal_hypothesis?.summary ??
-      result?.intent_analysis?.goal_hypothesis?.summary,
-    ""
-  );
+  const confidence = safeNumber(structuredAnalysis?.overall_confidence, 0);
+  const goalHypothesis =
+    structuredAnalysis?.goal_hypothesis &&
+    typeof structuredAnalysis.goal_hypothesis === "object" &&
+    !Array.isArray(structuredAnalysis.goal_hypothesis)
+      ? (structuredAnalysis.goal_hypothesis as Record<string, unknown>)
+      : undefined;
+  const goalSummary = normalizeText(goalHypothesis?.justification, "");
 
   return (
     <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">

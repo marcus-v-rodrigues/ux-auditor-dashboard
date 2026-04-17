@@ -138,7 +138,7 @@ A narrativa é exibida em **dois lugares**:
 
 #### b) No componente SemanticSummary
 
-**Arquivo:** [`components/player/SemanticSummary.tsx`](../components/player/SemanticSummary.tsx) (linhas 119-123)
+**Arquivo:** [`components/analysis/SemanticSummary.tsx`](../components/analysis/SemanticSummary.tsx)
 
 ```tsx
 <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/30">
@@ -150,9 +150,9 @@ A narrativa é exibida em **dois lugares**:
 
 ### 2. Psychometrics (objeto)
 
-Exibido no painel lateral direito, componente [`InsightsPanel`](../components/player/InsightsPanel.tsx).
+Exibido no painel lateral direito, componente [`InsightsPanel`](../components/analysis/InsightsPanel.tsx).
 
-**Arquivo:** [`components/player/InsightsPanel.tsx`](../components/player/InsightsPanel.tsx) (linhas 66-127)
+**Arquivo:** [`components/analysis/InsightsPanel.tsx`](../components/analysis/InsightsPanel.tsx)
 
 ```mermaid
 graph TD
@@ -176,7 +176,7 @@ graph TD
 
 Se o backend retornar apenas parte de `psychometrics`, o painel completa com valores seguros antes de montar a UI.
 
-Também é usado no [`SemanticSummary`](../components/player/SemanticSummary.tsx) para exibir:
+Também é usado no [`SemanticSummary`](../components/analysis/SemanticSummary.tsx) para exibir:
 
 | Campo Convertido | Origem | Escala |
 |------------------|--------|--------|
@@ -185,9 +185,9 @@ Também é usado no [`SemanticSummary`](../components/player/SemanticSummary.tsx
 
 ### 3. Intent Analysis (objeto)
 
-Exibido no painel lateral direito, componente [`InsightsPanel`](../components/player/InsightsPanel.tsx).
+Exibido no painel lateral direito, componente [`InsightsPanel`](../components/analysis/InsightsPanel.tsx).
 
-**Arquivo:** [`components/player/InsightsPanel.tsx`](../components/player/InsightsPanel.tsx) (linhas 129-182)
+**Arquivo:** [`components/analysis/InsightsPanel.tsx`](../components/analysis/InsightsPanel.tsx)
 
 ```mermaid
 graph TD
@@ -220,10 +220,10 @@ ux-auditor-dashboard/
 ├── app/
 │   └── page.tsx                      # Página principal, dispara análise
 ├── components/
+│   ├── analysis/
+│   │   ├── InsightsPanel.tsx         # Painel de insights e dados processados
+│   │   └── SemanticSummary.tsx       # Resumo executivo com narrativa
 │   └── player/
-│       ├── InsightsPanel.tsx         # Painel de insights e dados processados
-│       ├── SemanticSummary.tsx       # Resumo executivo com narrativa
-│       ├── TelemetryPanel.tsx        # Painel de telemetria
 │       └── VideoPlayer.tsx           # Player de vídeo rrweb
 └── types/
     └── dashboard.ts                  # Definições TypeScript dos dados
@@ -315,7 +315,7 @@ interface IntentAnalysis {
 
 ## Observação Importante
 
-O componente [`InsightsPanel`](../components/player/InsightsPanel.tsx) recebe `narrative` como prop, mas **não está sendo passado** no [`app/page.tsx`](../app/page.tsx):
+O componente [`InsightsPanel`](../components/analysis/InsightsPanel.tsx) recebe `narrative` como prop, mas **não está sendo passado** no [`app/page.tsx`](../app/page.tsx):
 
 ```tsx
 <InsightsPanel 

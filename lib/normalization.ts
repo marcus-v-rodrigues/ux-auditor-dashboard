@@ -2,8 +2,8 @@ import type {
   BoundingBox,
   InsightEvent,
   JobStatus,
-  ModernIntentAnalysis,
-  ModernPsychometrics,
+  IntentAnalysis,
+  Psychometrics,
   SessionJobSubmissionResponse,
   SessionJobStatusResponse,
   SessionProcessResponse,
@@ -18,6 +18,16 @@ function isRecord(value: unknown): value is RecordLike {
 
 function cloneRecord(value: RecordLike): RecordLike {
   return { ...value };
+}
+
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return "";
 }
 
 export function safeNumber(value: unknown, fallback = 0): number {
@@ -93,7 +103,7 @@ export function normalizeSessionProcessStats(value: unknown): SessionProcessStat
   };
 }
 
-export function normalizeModernPsychometrics(value: unknown): ModernPsychometrics | null {
+export function normalizePsychometrics(value: unknown): Psychometrics | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -115,7 +125,7 @@ export function normalizeModernPsychometrics(value: unknown): ModernPsychometric
   };
 }
 
-export function normalizeModernIntentAnalysis(value: unknown): ModernIntentAnalysis | null {
+export function normalizeIntentAnalysis(value: unknown): IntentAnalysis | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -142,18 +152,28 @@ export function normalizeStructuredAnalysis(value: unknown): Record<string, unkn
 
 export function normalizeSessionProcessResponse(value: unknown): SessionProcessResponse {
   const response = isRecord(value) ? value : {};
+  const structuredAnalysis =
+    normalizeStructuredAnalysis(response.structured_analysis) ??
+    (isRecord(response.llm_output) && isRecord(response.llm_output.structured_analysis)
+      ? cloneRecord(response.llm_output.structured_analysis)
+      : null);
+  const fallbackNarrative = firstNonEmptyString(
+    response.narrative,
+    response.human_readable_summary,
+    structuredAnalysis?.session_narrative
+  );
 
   return {
     session_uuid: normalizeText(response.session_uuid, ""),
     user_id: normalizeText(response.user_id, ""),
-    narrative: normalizeText(response.narrative, ""),
-    psychometrics: normalizeModernPsychometrics(response.psychometrics) ?? {},
-    intent_analysis: normalizeModernIntentAnalysis(response.intent_analysis) ?? {},
+    narrative: fallbackNarrative,
+    psychometrics: normalizePsychometrics(response.psychometrics) ?? {},
+    intent_analysis: normalizeIntentAnalysis(response.intent_analysis) ?? {},
     insights: normalizeInsightEvents(response.insights),
     stats: normalizeSessionProcessStats(response.stats),
     semantic_bundle: response.semantic_bundle,
     llm_output: response.llm_output,
-    structured_analysis: normalizeStructuredAnalysis(response.structured_analysis),
+    structured_analysis: structuredAnalysis,
   };
 }
 

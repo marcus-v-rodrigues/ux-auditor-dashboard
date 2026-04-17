@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import VideoPlayer from '@/components/player/VideoPlayer';
 import { FileUploader } from '@/components/FileUploader';
-import { InsightsPanel } from '@/components/player/InsightsPanel';
+import { InsightsPanel } from '@/components/analysis/InsightsPanel';
+import { SemanticSummary } from '@/components/analysis/SemanticSummary';
 import type {
   InsightEvent,
   ProcessingStatus,
@@ -15,7 +16,7 @@ import type {
   SessionJobSubmissionResponse,
   SessionProcessResponse,
 } from '@/types/dashboard';
-import { normalizeSessionJobStatus, safeNumber } from '@/lib/normalization';
+import { normalizeSessionJobStatus } from '@/lib/normalization';
 
 const POLLING_INTERVAL_MS = 2000;
 const POLLING_TIMEOUT_MS = 5 * 60 * 1000;
@@ -177,16 +178,6 @@ export default function DashboardPage() {
   const hasSession = sessionUuid.length > 0;
   const shouldPoll = hasSession && !pollingTimedOut && (processingStatus === 'queued' || processingStatus === 'processing');
 
-  const sessionDuration = useMemo(() => {
-    if (uploadedEvents.length === 0) {
-      return 0;
-    }
-
-    const firstTimestamp = safeNumber(uploadedEvents[0]?.timestamp, 0);
-    const lastTimestamp = safeNumber(uploadedEvents[uploadedEvents.length - 1]?.timestamp, 0);
-    return Math.max(0, lastTimestamp - firstTimestamp);
-  }, [uploadedEvents]);
-
   const activeOverlays = useMemo<InsightEvent[]>(() => {
     const insights = analysisResult?.insights ?? [];
     if (insights.length === 0) {
@@ -271,6 +262,8 @@ export default function DashboardPage() {
         });
 
         const data: unknown = await response.json().catch(() => ({}));
+
+        console.log(data)
 
         if (requestGeneration !== sessionGenerationRef.current) {
           return;
@@ -549,31 +542,12 @@ export default function DashboardPage() {
         </section>
 
         <section className="flex min-h-0 min-w-0 flex-col lg:pt-0">
-          <Card className="h-full min-h-0 border-white/10 bg-white/[0.03] shadow-lg shadow-slate-950/20">
-            <CardHeader className="border-b border-white/10 pb-4">
-              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-white">
-                Estado da ingestão
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400">Status</p>
-                <p className="mt-1 text-sm text-white">{badgeLabel}</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400">Duração local</p>
-                <p className="mt-1 text-sm text-white">{sessionDuration} ms</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400">Eventos</p>
-                <p className="mt-1 text-sm text-white">{uploadedEvents.length}</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400">Janela atual</p>
-                <p className="mt-1 text-sm text-white">{currentTime} ms</p>
-              </div>
-            </CardContent>
-          </Card>
+          <SemanticSummary
+            result={analysisReady ? analysisResult : null}
+            status={processingStatus}
+            processingError={processingError}
+            onRetryStatus={() => void refreshSessionStatus('manual')}
+          />
         </section>
 
         <section className="flex min-h-0 min-w-0 flex-col lg:col-span-2">

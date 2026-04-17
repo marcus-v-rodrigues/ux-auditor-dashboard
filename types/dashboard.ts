@@ -39,14 +39,14 @@ export interface SessionProcessStats {
   rage_clicks: number;
 }
 
-export type ModernPsychometrics = {
+export type Psychometrics = {
   overall_confidence?: number;
   goal_hypothesis?: Record<string, unknown>;
   friction_points?: unknown[];
   progress_signals?: unknown[];
 } & Record<string, unknown>;
 
-export type ModernIntentAnalysis = {
+export type IntentAnalysis = {
   goal_hypothesis?: Record<string, unknown>;
   hypotheses?: unknown[];
   overall_confidence?: number;
@@ -56,8 +56,8 @@ export interface SessionProcessResponse {
   session_uuid: string;
   user_id: string;
   narrative: string;
-  psychometrics: ModernPsychometrics;
-  intent_analysis: ModernIntentAnalysis;
+  psychometrics: Psychometrics;
+  intent_analysis: IntentAnalysis;
   insights: InsightEvent[];
   stats: SessionProcessStats;
   semantic_bundle?: unknown;

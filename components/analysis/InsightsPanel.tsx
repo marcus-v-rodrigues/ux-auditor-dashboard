@@ -7,8 +7,7 @@ import type {
   SessionProcessResponse,
 } from "@/types/dashboard";
 import { safeNumber, safeString } from "@/lib/normalization";
-import { AlertTriangle, BarChart3, Clock3, Layers3 } from "lucide-react";
-import { SemanticSummary } from "./SemanticSummary";
+import { AlertTriangle, BarChart3, Clock3 } from "lucide-react";
 import { SemanticDiagnostics } from "./SemanticDiagnostics";
 import { JsonDataCard } from "./JsonDataCard";
 
@@ -64,30 +63,6 @@ function statusBadgeClass(status: ProcessingStatus): string {
   }
 }
 
-function describeValue(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.slice(0, 4).map((item) => describeValue(item)).filter(Boolean).join(" • ");
-  }
-
-  if (value && typeof value === "object") {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return "[objeto complexo]";
-    }
-  }
-
-  return "";
-}
-
 function renderSkeleton() {
   return (
     <div className="space-y-4">
@@ -125,7 +100,6 @@ export function InsightsPanel({
   const hasActiveInsights = activeInsights.length > 0;
   const processingMessage = statusMessage(processingStatus);
   const totalInsights = safeNumber(insights.length, 0);
-  const structuredAnalysis = result?.structured_analysis;
   const semanticBundle = result?.semantic_bundle;
   const llmOutput = result?.llm_output;
 
@@ -143,7 +117,7 @@ export function InsightsPanel({
             </p>
           </div>
           <Badge variant="outline" className={`h-6 px-2 text-[10px] ${statusBadgeClass(processingStatus)}`}>
-            {processingStatus}
+            {processingMessage}
           </Badge>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -183,13 +157,6 @@ export function InsightsPanel({
             renderSkeleton()
           ) : (
             <>
-              <SemanticSummary
-                result={result}
-                status={processingStatus}
-                processingError={processingError}
-                onRetryStatus={onRetryStatus}
-              />
-
               <SemanticDiagnostics result={result} />
 
               <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
@@ -243,25 +210,6 @@ export function InsightsPanel({
                   )}
                 </CardContent>
               </Card>
-
-              {structuredAnalysis ? (
-                <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
-                  <CardHeader className="border-b border-border/60 pb-4">
-                    <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
-                      <Layers3 className="h-4 w-4 text-sky-400" />
-                      Estrutura analítica rica
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 pt-4">
-                    {Object.entries(structuredAnalysis).slice(0, 6).map(([key, value]) => (
-                      <div key={key} className="rounded-xl border border-border/60 bg-background/60 p-3">
-                        <p className="text-[10px] uppercase tracking-wider text-slate-400">{key}</p>
-                        <p className="mt-1 text-sm text-white">{describeValue(value) || "Indisponível"}</p>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              ) : null}
 
               <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                 {semanticBundle ? (
