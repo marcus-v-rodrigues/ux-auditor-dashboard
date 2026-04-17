@@ -8,6 +8,7 @@ import type {
   SessionJobSubmissionResponse,
   SessionJobStatusResponse,
   SessionProcessResponse,
+  SessionReprocessResponse,
   SessionProcessStats,
 } from "@/types/dashboard";
 
@@ -190,6 +191,24 @@ export function normalizeSessionJobSubmission(
     message: normalizeText(value.message, "Eventos da sessão enfileirados para processamento assíncrono"),
     session_uuid: normalizeText(value.session_uuid, ""),
     user_id: normalizeText(value.user_id, ""),
+  };
+}
+
+export function normalizeSessionReprocessResponse(
+  value: unknown
+): SessionReprocessResponse | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    session_uuid: normalizeText(value.session_uuid, ""),
+    user_id: normalizeText(value.user_id, ""),
+    status: "queued",
+    message: normalizeText(
+      value.message,
+      "Sessão reenfileirada para reprocessamento assíncrono"
+    ),
   };
 }
 

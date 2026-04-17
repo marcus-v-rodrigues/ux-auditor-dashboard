@@ -31,6 +31,13 @@ export interface SessionJobSubmissionResponse {
   user_id: string;
 }
 
+export interface SessionReprocessResponse {
+  session_uuid: string;
+  user_id: string;
+  status: "queued";
+  message: string;
+}
+
 export interface SessionProcessStats {
   total_events: number;
   kinematic_vectors: number;

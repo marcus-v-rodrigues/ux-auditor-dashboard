@@ -11,7 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { extractRrwebEvents } from "@/lib/rrweb";
-import { normalizeSessionJobStatus } from "@/lib/normalization";
+import {
+  normalizeSessionJobStatus,
+  normalizeSessionReprocessResponse,
+} from "@/lib/normalization";
 import type {
   InsightEvent,
   ProcessingStatus,
@@ -84,6 +87,7 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
   const [rawError, setRawError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReprocessing, setIsReprocessing] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const activeOverlays = useMemo<InsightEvent[]>(() => {
@@ -130,6 +134,54 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
       setIsRefreshing(false);
     }
   }, [uuid]);
+
+  const reprocessSession = useCallback(async () => {
+    setIsReprocessing(true);
+
+    try {
+      const response = await fetch(`/api/sessions/${uuid}/reprocess`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data: unknown = await response.json().catch(() => ({}));
+
+      if (response.status !== 202) {
+        const message =
+          data && typeof data === "object" && "error" in data
+            ? String((data as { error?: unknown }).error ?? "Erro ao reenfileirar sessão")
+            : `Erro HTTP ${response.status}`;
+        throw new Error(message);
+      }
+
+      const normalized = normalizeSessionReprocessResponse(data);
+      if (!normalized) {
+        throw new Error("Resposta de reprocessamento invalida.");
+      }
+
+      setSessionData((previous) => ({
+        session_uuid: normalized.session_uuid || previous?.session_uuid || uuid,
+        user_id: normalized.user_id || previous?.user_id || "",
+        status: normalized.status,
+        raw_status: normalized.status,
+        processing_error: null,
+        result: null,
+      }));
+      setProcessingStatus(normalized.status);
+      setProcessingError(null);
+      setStatusError(null);
+
+      void loadStatus();
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Nao foi possivel reenfileirar a sessão.";
+      setStatusError(message);
+      setProcessingError(message);
+    } finally {
+      setIsReprocessing(false);
+    }
+  }, [loadStatus, uuid]);
 
   useEffect(() => {
     let active = true;
@@ -239,12 +291,14 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
-                onClick={() => void loadStatus()}
-                disabled={isRefreshing}
+                onClick={() => void reprocessSession()}
+                disabled={isRefreshing || isReprocessing}
                 className="border-white/10 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
               >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                Reconsultar status
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${isRefreshing || isReprocessing ? "animate-spin" : ""}`}
+                />
+                Reprocessar sessão
               </Button>
               <Button
                 asChild
@@ -311,7 +365,7 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
               result={analysisReady ? sessionData?.result : null}
               status={processingStatus}
               processingError={processingError}
-              onRetryStatus={() => void loadStatus()}
+              onReprocess={() => void reprocessSession()}
             />
           </section>
 
@@ -321,7 +375,7 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
               currentTime={currentTime}
               processingStatus={processingStatus}
               processingError={processingError}
-              onRetryStatus={() => void loadStatus()}
+              onReprocess={() => void reprocessSession()}
             />
           </section>
         </main>

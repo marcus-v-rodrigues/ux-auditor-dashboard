@@ -8,7 +8,7 @@ interface SemanticSummaryProps {
   result?: SessionProcessResponse | null;
   status: ProcessingStatus;
   processingError?: string | null;
-  onRetryStatus?: () => void;
+  onReprocess?: () => void;
 }
 
 function statusLabel(status: ProcessingStatus): string {
@@ -48,7 +48,7 @@ export function SemanticSummary({
   result,
   status,
   processingError,
-  onRetryStatus,
+  onReprocess,
 }: SemanticSummaryProps) {
   const structuredAnalysis =
     result?.structured_analysis &&
@@ -150,14 +150,14 @@ export function SemanticSummary({
             <p className="mt-1 text-sm text-red-100/80">
               {normalizeText(processingError, "O worker não retornou um erro detalhado.")}
             </p>
-            {onRetryStatus && (
+            {onReprocess && (
               <button
                 type="button"
-                onClick={onRetryStatus}
+                onClick={onReprocess}
                 className="mt-3 inline-flex items-center gap-2 rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-100 transition-colors hover:bg-red-500/10"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-                Reconsultar status
+                Reprocessar sessão
               </button>
             )}
           </div>

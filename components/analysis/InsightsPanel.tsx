@@ -16,7 +16,7 @@ interface Props {
   currentTime: number;
   processingStatus: ProcessingStatus;
   processingError?: string | null;
-  onRetryStatus?: () => void;
+  onReprocess?: () => void;
 }
 
 function formatInsightLabel(insight: InsightEvent): string {
@@ -92,7 +92,7 @@ export function InsightsPanel({
   currentTime,
   processingStatus,
   processingError,
-  onRetryStatus,
+  onReprocess,
 }: Props) {
   const insights = result?.insights ?? [];
   const activeInsights = insights.filter((insight) => Math.abs(insight.timestamp - currentTime) < 1000);
@@ -136,13 +136,13 @@ export function InsightsPanel({
               <div className="min-w-0">
                 <p className="font-medium">Falha de processamento</p>
                 <p className="mt-1 text-red-100/80">{processingError}</p>
-                {onRetryStatus && (
+                {onReprocess && (
                   <button
                     type="button"
-                    onClick={onRetryStatus}
+                    onClick={onReprocess}
                     className="mt-2 inline-flex items-center gap-2 rounded-md border border-red-500/30 px-2.5 py-1 text-[10px] font-medium text-red-100 transition-colors hover:bg-red-500/10"
                   >
-                    Reconsultar status
+                    Reprocessar sessão
                   </button>
                 )}
               </div>
