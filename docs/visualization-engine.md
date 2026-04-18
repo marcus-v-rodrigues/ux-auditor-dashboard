@@ -1,59 +1,52 @@
-# Módulo: Motor de Visualização e Sincronia Temporal
+# Módulo: Motor de Visualização e Engenharia de Sincronia
 
-## Visão Geral e Propósito
-Este módulo é o "coração" da experiência do usuário, responsável por renderizar a reprodução da sessão (Replay) e sincronizar visualmente os dados analíticos (Insights) com o momento exato do vídeo. Ele resolve o problema de **contextualização temporal**, garantindo que uma anomalia detectada no tempo $T$ seja exibida ao usuário apenas quando o player atingir o tempo $T$.
+## 1. Visão Geral e Propósito
+O motor de visualização é o componente tecnicamente mais complexo do Dashboard. Ele não é apenas um player de vídeo, mas sim um **reconstrutor dinâmico de DOM** que opera em sincronia com metadados analíticos. Ele permite a observação do fenômeno (uso do sistema) e sua sobreposição com o diagnóstico assistido por IA.
 
-## Arquitetura e Lógica
+## 2. Engenharia de Reconstrução (rrweb-player)
+Diferente de frames de pixel, o Dashboard utiliza snapshots serializados da árvore DOM.
+
+### Ciclo de Vida da Reconstrução:
+1.  **Snapshot Inicial (Full Snapshot):** A base do DOM é reconstruída em um `iframe` seguro (sandbox).
+2.  **Mutações (Incremental Snapshots):** Eventos como `NodeAdded`, `AttributeModified` e `TextContentModified` são aplicados em ordem cronológica.
+3.  **Eventos de Interação:** Movimentos de mouse, cliques e toques são renderizados como uma camada visual separada (*virtual cursor*).
+
+## 3. Sincronia Temporal e Injeção de Overlays
+O sistema de IA envia insights com coordenadas espaciais e timestamps. O Dashboard deve projetar essas coordenadas dinamicamente sobre o DOM reconstruído.
+
+### Transformação de Coordenadas (Bounding Box Projection)
+A interface recebe as coordenadas da IA ($x, y, w, h$) e as projeta sobre o player:
+
+$$
+P_{target} = f(P_{raw}, S_{viewport}, C_{scroll})
+$$
+
+Onde:
+*   $P_{raw}$: Coordenadas enviadas pela IA.
+*   $S_{viewport}$: Escala do player na tela do analista.
+*   $C_{scroll}$: Estado do scroll no momento $T$.
+
+Os **Overlays** são injetados como elementos HTML (`div` com borda neon) diretamente sobre o cursor do player, garantindo que o analista veja exatamente o que a IA está analisando.
+
+## 4. O Modelo de Observador de Tempo (React Context/State)
+Para manter todos os componentes sincronizados, o Dashboard utiliza um **Single Source of Truth** para o tempo:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables':
-   { 'primaryColor': '#bfbfbf', 'edgeColor': '#5d5d5d' }, "flowchart": {"subGraphTitleMargin": {"bottom": 30}}}}%%
-flowchart TD
-    Player[rrweb-player] -- "currentTime (ms)" --> Hook[Observador de Estado]
-    Data[(Array de Insights)] --> Hook
-    subgraph Engine [Motor de Sincronia]
-        Hook --> Filter{Janela Deslizante}
-        Filter -- "|Ti - t| < 1500ms" --> Active[Insights em Destaque]
-        Filter -- Fora da Janela --> Hidden[Inativo]
+graph TD
+    Player[rrweb-player] -- "onTimeUpdate (ms)" --> State[currentTime State]
+    
+    subgraph "Consumidores de Sincronia"
+        State --> Insights[InsightsPanel: Filtragem de Cards]
+        State --> Telemetry[TelemetryCharts: Movimento do Cursor]
+        State --> Overlays[VideoPlayer: Desenho de Bounding Boxes]
+        State --> Semantic[SemanticSummary: Diagnóstico do Momento]
     end
-    Active --> UI[InsightsPanel UI]
 ```
 
-### Componente: `InsightsPanel.tsx`
-O painel lateral atua como um observador do estado do player.
+## 5. Estratégia de Performance (UI Responsiveness)
+Como o estado de tempo muda em alta frequência (até 60 FPS), o Dashboard implementa otimizações para evitar *re-renders* pesados:
+*   **Memoização:** Componentes como `InsightsPanel` utilizam `useMemo` para recalcular a lista de insights ativos apenas quando a janela temporal de 1.5s é cruzada.
+*   **CSS Transitions:** As barras psicométricas utilizam transições de CSS puro para animações fluidas, movendo a carga de animação da CPU para a GPU.
 
-1.  **Input:**
-    *   `currentTime` (number): Timestamp atual do player (ms).
-    *   `insights` (InsightEvent[]): Lista completa de anomalias.
-2.  **Processamento (Filtragem em Tempo Real):**
-    A cada atualização de frame (tick), o componente recalcula quais insights são relevantes.
-3.  **Visualização:** Renderiza cards de anomalia e atualiza as barras psicométricas.
-
-### Lógica de Filtragem Temporal
-O sistema utiliza uma **Janela Deslizante (Sliding Window)** para determinar a relevância de um insight.
-
-$$
-Relevant(i, t) \iff |T_i - t_{current}| < \Delta t
-$$
-
-*   $T_i$: Timestamp do evento de insight $i$.
-*   $t_{current}$: Tempo atual do player.
-*   $\Delta t$: Janela de tolerância (definida como 1500ms).
-
-## Parâmetros Técnicos
-*   **Janela de Ativação ($\Delta t$):** 1500ms. Define quanto tempo um insight permanece "em destaque" no painel.
-*   **Taxa de Atualização:** Vinculada ao loop de renderização do `rrweb-player` (tipicamente 60fps ou updates de estado do React).
-
-## Mapeamento Tecnológico e Referências
-
-*   **Player Engine:** **rrweb-player**
-    *   *Documentação:* [https://github.com/rrweb-io/rrweb-player](https://github.com/rrweb-io/rrweb-player)
-    *   *Função:* Renderiza o DOM virtual e fornece hooks para controle de tempo (`currentTime`, `play`, `pause`).
-*   **Componentes de Interface:** **Lucide React** (Ícones)
-    *   *Documentação:* [https://lucide.dev/](https://lucide.dev/)
-    *   *Uso:* Ícones semânticos para representar tipos de insights (ex: `Eye` para visualização, `AlertTriangle` para erros).
-
-## Justificativa de Escolha
-A estratégia de **filtragem no cliente** (Client-Side Filtering) foi escolhida em vez de pré-processar frames no backend.
-*   **Motivo:** O array de insights é pequeno (< 100 itens típicos), permitindo que operações `Array.filter` rodem a cada renderização sem impacto de performance perceptível (O(N) onde N é pequeno).
-*   **Benefício:** Permite "scrubbing" (arrastar a barra de tempo) com feedback instantâneo, sem necessidade de novas requisições ao servidor para buscar "insights do minuto atual".
+## 6. Justificativa Técnica: Injeção de Insights no DOM
+Ao contrário de vídeos, o uso de `rrweb` permite que o analista inspecione o código-fonte do elemento que causou o insight diretamente no player. Isso permite uma auditoria técnica profunda (ex: descobrir que um botão não tem `aria-label` ou que um ID está duplicado causando comportamento errático).
