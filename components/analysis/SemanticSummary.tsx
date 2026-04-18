@@ -31,16 +31,16 @@ function statusLabel(status: ProcessingStatus): string {
 function statusClassName(status: ProcessingStatus): string {
   switch (status) {
     case "completed":
-      return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+      return "app-status-success";
     case "failed":
-      return "bg-red-500/15 text-red-200 border-red-500/30";
+      return "app-status-error";
     case "processing":
     case "uploading":
-      return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+      return "app-status-processing";
     case "queued":
-      return "bg-sky-500/15 text-sky-300 border-sky-500/30";
+      return "app-status-queued";
     default:
-      return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+      return "app-status-neutral";
   }
 }
 
@@ -79,7 +79,7 @@ export function SemanticSummary({
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
-              <FileText className="h-4 w-4 text-sky-300" />
+              <FileText className="app-icon-accent h-4 w-4" />
               Resumo semântico
             </CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -96,7 +96,7 @@ export function SemanticSummary({
         {hasNarrative ? (
           <div className="rounded-xl border border-border/60 bg-background/60 p-4">
             <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-sky-300" />
+              <Sparkles className="app-icon-accent h-3.5 w-3.5" />
               Narrativa
             </div>
             <p className="text-sm leading-relaxed text-foreground">{narrative}</p>
@@ -137,7 +137,7 @@ export function SemanticSummary({
         {goalSummary && (
           <div className="min-w-0 rounded-xl border border-border/60 bg-background/60 p-4">
             <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <SquareActivity className="h-3.5 w-3.5 text-sky-300" />
+              <SquareActivity className="app-icon-accent h-3.5 w-3.5" />
               Hipótese principal
             </div>
             <p className="text-sm leading-relaxed text-foreground">{goalSummary}</p>
@@ -145,16 +145,16 @@ export function SemanticSummary({
         )}
 
         {status === "failed" && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-            <p className="text-sm font-medium text-red-200">Processamento interrompido.</p>
-            <p className="mt-1 text-sm text-red-100/80">
+          <div className="app-callout-error rounded-xl p-4">
+            <p className="text-sm font-medium">Processamento interrompido.</p>
+            <p className="mt-1 text-sm opacity-80">
               {normalizeText(processingError, "O worker não retornou um erro detalhado.")}
             </p>
             {onReprocess && (
               <button
                 type="button"
                 onClick={onReprocess}
-                className="mt-3 inline-flex items-center gap-2 rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-100 transition-colors hover:bg-red-500/10"
+                className="mt-3 inline-flex items-center gap-2 rounded-md border border-current/30 px-3 py-1.5 text-xs font-medium transition-colors hover:app-hover-surface"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Reprocessar sessão

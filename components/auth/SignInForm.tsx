@@ -37,12 +37,15 @@ export function SignInForm({ callbackUrl }: SignInFormProps) {
     <div className="space-y-4">
       <Button
         onClick={handleSignIn}
-        className="w-full"
+        className="h-11 w-full rounded-xl text-sm font-semibold"
         size="lg"
         disabled={isLoading}
       >
         {isLoading ? "Carregando..." : "Entrar com Janus IDP"}
       </Button>
+      <p className="app-text-soft text-center text-xs">
+        O login redireciona para o provedor e retorna automaticamente para a aplicação.
+      </p>
     </div>
   );
 }

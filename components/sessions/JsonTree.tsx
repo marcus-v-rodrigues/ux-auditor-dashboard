@@ -33,9 +33,9 @@ function JsonTreeNode({
 
   if (!expandable) {
     return (
-      <div className="font-mono text-xs leading-6 text-slate-200">
-        <span className="text-sky-300">{label}</span>
-        <span className="text-slate-500">: </span>
+      <div className="app-heading font-mono text-xs leading-6">
+        <span className="app-icon-accent">{label}</span>
+        <span className="app-text-muted">: </span>
         <span>{valueLabel(value)}</span>
       </div>
     );
@@ -50,19 +50,19 @@ function JsonTreeNode({
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="flex items-center gap-2 font-mono text-xs leading-6 text-slate-200"
+        className="app-heading flex items-center gap-2 font-mono text-xs leading-6"
       >
         {isOpen ? (
-          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+          <ChevronDown className="app-text-soft h-3.5 w-3.5" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+          <ChevronRight className="app-text-soft h-3.5 w-3.5" />
         )}
-        <span className="text-sky-300">{label}</span>
-        <span className="text-slate-500">{valueLabel(value)}</span>
+        <span className="app-icon-accent">{label}</span>
+        <span className="app-text-muted">{valueLabel(value)}</span>
       </button>
 
       {isOpen ? (
-        <div className="ml-5 border-l border-white/10 pl-3">
+        <div className="app-tree-line ml-5 border-l pl-3">
           {entries.map(([entryLabel, entryValue]) => (
             <JsonTreeNode
               key={`${label}-${entryLabel}`}

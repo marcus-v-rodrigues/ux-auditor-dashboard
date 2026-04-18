@@ -6,8 +6,12 @@
 :root {
   --background: oklch(0.14 0.02 250);
   --foreground: oklch(0.97 0.01 250);
-  
+
   --radius: 0.75rem;
+  --brand: oklch(0.72 0.14 235);
+  --brand-foreground: oklch(0.13 0.02 250);
+  --brand-soft: oklch(0.8 0.12 198);
+  --brand-deep: oklch(0.66 0.11 215);
 
   /* Card e superfícies */
   --card: oklch(0.18 0.02 250);
@@ -16,8 +20,8 @@
   --popover-foreground: oklch(0.97 0.01 250);
 
   /* Identidade visual: azul/cyan */
-  --primary: oklch(0.72 0.14 235);
-  --primary-foreground: oklch(0.13 0.02 250);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
 
   /* Tons secundários e de fundo */
   --secondary: oklch(0.22 0.02 250);
@@ -37,25 +41,74 @@
   --ring: oklch(0.68 0.12 235);
 
   /* Cores de gráficos */
-  --chart-1: oklch(0.72 0.14 235);
-  --chart-2: oklch(0.8 0.12 198);
+  --chart-1: var(--brand);
+  --chart-2: var(--brand-soft);
   --chart-3: oklch(0.74 0.12 260);
-  --chart-4: oklch(0.66 0.11 215);
+  --chart-4: var(--brand-deep);
   --chart-5: oklch(0.58 0.12 235);
 
   --sidebar: oklch(0.16 0.02 250);
   --sidebar-foreground: oklch(0.97 0.01 250);
-  --sidebar-primary: oklch(0.72 0.14 235);
-  --sidebar-primary-foreground: oklch(0.13 0.02 250);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: oklch(0.24 0.03 235);
   --sidebar-accent-foreground: oklch(0.97 0.01 250);
   --sidebar-border: oklch(0.26 0.02 250);
   --sidebar-ring: oklch(0.68 0.12 235);
+
+  --app-shell-bg:
+    radial-gradient(circle at top left, rgb(56 189 248 / 0.14), transparent 24%),
+    radial-gradient(circle at top right, rgb(14 165 233 / 0.08), transparent 22%),
+    linear-gradient(180deg, rgb(2 6 23 / 0.98), rgb(15 23 42 / 0.98));
+  --app-shell-overlay: linear-gradient(135deg, rgb(255 255 255 / 0.03), transparent 55%);
+  --app-panel: rgb(255 255 255 / 0.04);
+  --app-panel-strong: rgb(255 255 255 / 0.06);
+  --app-panel-muted: rgb(255 255 255 / 0.03);
+  --app-border: rgb(255 255 255 / 0.1);
+  --app-border-strong: rgb(103 232 249 / 0.22);
+  --app-text-soft: rgb(148 163 184);
+  --app-text-muted: rgb(100 116 139);
+  --app-shadow: 0 24px 80px rgb(2 6 23 / 0.42);
+  --app-shadow-soft: 0 20px 60px rgb(2 6 23 / 0.3);
+  --app-chip-bg: rgb(255 255 255 / 0.04);
+  --app-code-bg: rgb(255 255 255 / 0.05);
+  --app-elevated-bg: rgb(2 6 23 / 0.6);
+  --app-stage-bg:
+    radial-gradient(circle at top, rgb(56 189 248 / 0.18), transparent 45%),
+    linear-gradient(180deg, rgb(15 23 42 / 0.92), rgb(2 6 23 / 0.96));
+
+  --status-neutral-bg: rgb(100 116 139 / 0.15);
+  --status-neutral-border: rgb(100 116 139 / 0.3);
+  --status-neutral-text: rgb(203 213 225);
+  --status-queued-bg: rgb(14 165 233 / 0.15);
+  --status-queued-border: rgb(14 165 233 / 0.3);
+  --status-queued-text: rgb(125 211 252);
+  --status-processing-bg: rgb(245 158 11 / 0.15);
+  --status-processing-border: rgb(245 158 11 / 0.3);
+  --status-processing-text: rgb(253 224 71);
+  --status-success-bg: rgb(34 197 94 / 0.15);
+  --status-success-border: rgb(34 197 94 / 0.3);
+  --status-success-text: rgb(134 239 172);
+  --status-error-bg: rgb(239 68 68 / 0.12);
+  --status-error-border: rgb(239 68 68 / 0.28);
+  --status-error-text: rgb(254 202 202);
+
+  --callout-info-bg: rgb(34 211 238 / 0.1);
+  --callout-info-border: rgb(34 211 238 / 0.2);
+  --callout-info-text: rgb(236 254 255);
+  --callout-error-bg: rgb(239 68 68 / 0.1);
+  --callout-error-border: rgb(239 68 68 / 0.2);
+  --callout-error-text: rgb(254 242 242);
+  --app-disabled-bg: rgb(51 65 85);
+  --app-disabled-text: rgb(148 163 184);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-deep: var(--brand-deep);
   --font-sans: Arial, Helvetica, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -97,10 +150,7 @@
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgb(56 189 248 / 0.14), transparent 24%),
-    radial-gradient(circle at top right, rgb(14 165 233 / 0.08), transparent 22%),
-    linear-gradient(180deg, rgb(2 6 23 / 0.98), rgb(15 23 42 / 0.98));
+  background: var(--app-shell-bg);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -110,8 +160,8 @@ body {
   --foreground: oklch(0.97 0.01 250);
   --card: oklch(0.17 0.02 250);
   --card-foreground: oklch(0.97 0.01 250);
-  --primary: oklch(0.72 0.14 235);
-  --primary-foreground: oklch(0.13 0.02 250);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
   --secondary: oklch(0.22 0.02 250);
   --secondary-foreground: oklch(0.92 0.01 250);
   --border: oklch(0.28 0.02 250);
@@ -124,6 +174,152 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@utility app-shell {
+  background: var(--app-shell-overlay), var(--app-shell-bg);
+}
+
+@utility app-nav {
+  border-bottom: 1px solid var(--app-border);
+  background: rgb(2 6 23 / 0.8);
+  backdrop-filter: blur(18px);
+}
+
+@utility app-divider {
+  border-color: var(--app-border);
+}
+
+@utility app-panel {
+  background: var(--app-panel);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow);
+  backdrop-filter: blur(18px);
+}
+
+@utility app-panel-strong {
+  background: var(--app-panel-strong);
+  border: 1px solid var(--app-border-strong);
+  box-shadow: var(--app-shadow);
+  backdrop-filter: blur(18px);
+}
+
+@utility app-panel-muted {
+  background: var(--app-panel-muted);
+  border: 1px solid var(--app-border);
+}
+
+@utility app-outline-action {
+  border: 1px solid var(--app-border);
+  background: rgb(255 255 255 / 0.05);
+  color: var(--foreground);
+}
+
+@utility app-outline-action-hover {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--foreground);
+}
+
+@utility app-eyebrow {
+  color: var(--brand-soft);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+@utility app-text-soft {
+  color: var(--app-text-soft);
+}
+
+@utility app-text-muted {
+  color: var(--app-text-muted);
+}
+
+@utility app-icon-accent {
+  color: var(--brand-soft);
+}
+
+@utility app-hover-surface {
+  background: var(--app-panel-muted);
+}
+
+@utility app-disabled {
+  background: var(--app-disabled-bg);
+  color: var(--app-disabled-text);
+}
+
+@utility app-progress-track {
+  background: rgb(255 255 255 / 0.1);
+}
+
+@utility app-tree-line {
+  border-color: var(--app-border);
+}
+
+@utility app-heading {
+  color: var(--foreground);
+}
+
+@utility app-chip {
+  border: 1px solid var(--app-border);
+  background: var(--app-chip-bg);
+  color: var(--foreground);
+}
+
+@utility app-code {
+  border: 1px solid var(--app-border);
+  background: var(--app-code-bg);
+  color: var(--foreground);
+}
+
+@utility app-elevated {
+  border: 1px solid var(--app-border);
+  background: var(--app-elevated-bg);
+}
+
+@utility app-stage {
+  background: var(--app-stage-bg);
+}
+
+@utility app-status-neutral {
+  background: var(--status-neutral-bg);
+  border-color: var(--status-neutral-border);
+  color: var(--status-neutral-text);
+}
+
+@utility app-status-queued {
+  background: var(--status-queued-bg);
+  border-color: var(--status-queued-border);
+  color: var(--status-queued-text);
+}
+
+@utility app-status-processing {
+  background: var(--status-processing-bg);
+  border-color: var(--status-processing-border);
+  color: var(--status-processing-text);
+}
+
+@utility app-status-success {
+  background: var(--status-success-bg);
+  border-color: var(--status-success-border);
+  color: var(--status-success-text);
+}
+
+@utility app-status-error {
+  background: var(--status-error-bg);
+  border-color: var(--status-error-border);
+  color: var(--status-error-text);
+}
+
+@utility app-callout-info {
+  background: var(--callout-info-bg);
+  border: 1px solid var(--callout-info-border);
+  color: var(--callout-info-text);
+}
+
+@utility app-callout-error {
+  background: var(--callout-error-bg);
+  border: 1px solid var(--callout-error-border);
+  color: var(--callout-error-text);
 }
 
 /* Melhoria visual para os componentes rrweb */

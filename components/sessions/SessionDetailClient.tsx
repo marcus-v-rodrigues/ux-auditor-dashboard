@@ -45,16 +45,16 @@ function statusLabel(status: ProcessingStatus): string {
 function statusClassName(status: ProcessingStatus): string {
   switch (status) {
     case "completed":
-      return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+      return "app-status-success";
     case "failed":
-      return "bg-red-500/15 text-red-200 border-red-500/30";
+      return "app-status-error";
     case "processing":
     case "uploading":
-      return "bg-amber-500/15 text-amber-200 border-amber-500/30";
+      return "app-status-processing";
     case "queued":
-      return "bg-sky-500/15 text-sky-300 border-sky-500/30";
+      return "app-status-queued";
     default:
-      return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+      return "app-status-neutral";
   }
 }
 
@@ -258,12 +258,12 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
   return (
     <section className="px-4 py-4 md:px-6 md:py-6">
       <div className="flex flex-col gap-4">
-        <header className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 shadow-2xl shadow-slate-950/30">
+        <header className="app-panel-muted rounded-2xl px-4 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <FileJson className="h-4 w-4 text-sky-300" />
-                <h2 className="truncate text-sm font-semibold text-white">
+                <FileJson className="app-icon-accent h-4 w-4" />
+                <h2 className="app-heading truncate text-sm font-semibold">
                   Sessão {uuid}
                 </h2>
                 <Badge
@@ -273,15 +273,15 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
                   {statusLabel(processingStatus)}
                 </Badge>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <div className="app-text-soft mt-2 flex flex-wrap items-center gap-2 text-xs">
                 <span>{statusCopy(processingStatus, processingError)}</span>
                 {sessionData?.user_id ? (
-                  <span className="rounded-full border border-white/10 px-2 py-0.5">
+                  <span className="app-chip rounded-full px-2 py-0.5">
                     user {sessionData.user_id}
                   </span>
                 ) : null}
                 {analysisReady ? (
-                  <span className="rounded-full border border-cyan-400/30 px-2 py-0.5 text-cyan-300">
+                  <span className="app-status-success rounded-full border px-2 py-0.5">
                     resultado pronto
                   </span>
                 ) : null}
@@ -293,7 +293,7 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
                 variant="outline"
                 onClick={() => void reprocessSession()}
                 disabled={isRefreshing || isReprocessing}
-                className="border-white/10 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
+                className="app-outline-action hover:app-outline-action-hover"
               >
                 <RefreshCw
                   className={`mr-2 h-4 w-4 ${isRefreshing || isReprocessing ? "animate-spin" : ""}`}
@@ -303,7 +303,7 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
               <Button
                 asChild
                 variant="outline"
-                className="border-white/10 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
+                className="app-outline-action hover:app-outline-action-hover"
               >
                 <Link href={`/sessions/${uuid}/raw`}>
                   <Database className="mr-2 h-4 w-4" />
@@ -315,12 +315,12 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
         </header>
 
         {(processingStatus === "failed" || statusError || rawError) && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-50">
+          <div className="app-callout-error rounded-xl px-4 py-3 text-sm">
             <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-200" />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div className="min-w-0">
                 <p className="font-medium">Falha no carregamento da sessão</p>
-                <p className="mt-1 text-red-50/80">
+                <p className="mt-1 opacity-80">
                   {processingStatus === "failed"
                     ? processingError
                     : statusError ?? rawError}
@@ -332,10 +332,10 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
 
         <main className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,2.2fr)_minmax(360px,1fr)]">
           <section className="flex min-h-0 min-w-0 flex-col gap-4">
-            <Card className="flex min-h-0 flex-col overflow-hidden border-white/10 bg-white/[0.03] py-0 shadow-2xl shadow-slate-950/30">
-              <CardHeader className="border-b border-white/10 !py-6">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
-                  <Sparkles className="h-4 w-4 text-sky-300" />
+            <Card className="app-panel-muted flex min-h-0 flex-col overflow-hidden py-0">
+              <CardHeader className="app-divider border-b !py-6">
+                <CardTitle className="app-heading flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
+                  <Sparkles className="app-icon-accent h-4 w-4" />
                   Replay da sessão
                 </CardTitle>
               </CardHeader>
@@ -352,7 +352,7 @@ export function SessionDetailClient({ uuid }: { uuid: string }) {
                     />
                   </div>
                 ) : (
-                  <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-400">
+                  <div className="app-text-soft flex flex-1 items-center justify-center p-6 text-sm">
                     {rawError ?? "Carregando eventos rrweb para o replay..."}
                   </div>
                 )}

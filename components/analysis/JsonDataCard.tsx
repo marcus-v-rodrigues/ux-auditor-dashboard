@@ -67,14 +67,14 @@ export function JsonDataCard({ title, filename, value }: JsonDataCardProps) {
       <CardHeader className="border-b border-border/60 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
-              <FileText className="h-4 w-4 text-sky-400" />
+            <CardTitle className="app-heading flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
+              <FileText className="app-icon-accent h-4 w-4" />
               {title}
             </CardTitle>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-slate-400">
-              <span className="rounded-full border border-white/10 px-2 py-1">{formatCompactNumber(lineCount)} linhas</span>
-              <span className="rounded-full border border-white/10 px-2 py-1">{formatCompactNumber(charCount)} caracteres</span>
-              <span className="rounded-full border border-white/10 px-2 py-1 font-mono normal-case text-slate-300">{filename}</span>
+            <div className="app-text-soft mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider">
+              <span className="app-chip rounded-full px-2 py-1">{formatCompactNumber(lineCount)} linhas</span>
+              <span className="app-chip rounded-full px-2 py-1">{formatCompactNumber(charCount)} caracteres</span>
+              <span className="app-chip rounded-full px-2 py-1 font-mono normal-case">{filename}</span>
             </div>
           </div>
 
@@ -82,7 +82,7 @@ export function JsonDataCard({ title, filename, value }: JsonDataCardProps) {
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 border-border/60 bg-background/60 text-[10px] uppercase tracking-wider text-slate-200 hover:bg-background/90 hover:text-white"
+            className="h-8 text-[10px] uppercase tracking-wider"
             onClick={() => downloadJsonFile(filename, value)}
           >
             <Download className="h-3.5 w-3.5" />
@@ -94,35 +94,35 @@ export function JsonDataCard({ title, filename, value }: JsonDataCardProps) {
       <CardContent className="space-y-4 pt-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-0 flex-1">
-            <FileSearch className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <FileSearch className="app-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Buscar texto no JSON"
-              className="border-border/60 bg-background/60 pl-9 text-sm text-slate-100 placeholder:text-slate-500"
+              className="pl-9 text-sm"
             />
           </div>
           {hasQuery ? (
-            <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400">
+            <span className="app-chip app-text-soft rounded-full px-2 py-1 text-[10px] uppercase tracking-wider">
               {formatCompactNumber(visibleLineCount)} linhas visiveis
             </span>
           ) : null}
         </div>
 
         <div className="rounded-xl border border-border/60 bg-background/70">
-          <div className="flex items-center justify-between border-b border-border/60 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-400">
+          <div className="app-text-soft flex items-center justify-between border-b border-border/60 px-3 py-2 text-[10px] uppercase tracking-wider">
             <span>{hasQuery ? "Resultado da busca" : "Visualizador"}</span>
-            <span className="font-mono text-slate-500">JSON</span>
+            <span className="app-text-muted font-mono">JSON</span>
           </div>
 
           <ScrollArea className="h-[min(60vh,28rem)] min-h-0 min-w-0">
             {hasResults ? (
-              <pre className="min-w-0 whitespace-pre-wrap break-all p-4 font-mono text-[11px] leading-relaxed text-slate-200 overflow-wrap-anywhere">
+              <pre className="app-heading min-w-0 whitespace-pre-wrap break-all p-4 font-mono text-[11px] leading-relaxed overflow-wrap-anywhere">
                 {filteredJson}
               </pre>
             ) : (
-              <div className="p-4 text-sm text-slate-400">
-                Nenhuma linha corresponde a <span className="font-mono text-slate-200">{query}</span>.
+              <div className="app-text-soft p-4 text-sm">
+                Nenhuma linha corresponde a <span className="app-heading font-mono">{query}</span>.
               </div>
             )}
           </ScrollArea>

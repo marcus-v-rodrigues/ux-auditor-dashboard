@@ -22,13 +22,13 @@ export function NewSessionClient() {
     <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl items-center px-4 py-10 md:px-6">
       <div className="w-full space-y-6">
         <div className="mx-auto max-w-2xl text-center">
-          <div className="mb-4 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.3em] text-sky-200">
+          <div className="app-chip app-eyebrow mb-4 inline-flex rounded-full px-3 py-1 text-[10px] font-medium tracking-[0.3em]">
             Coleta de JSON
           </div>
-          <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
+          <h2 className="app-heading text-3xl font-semibold tracking-tight md:text-4xl">
             Envie uma sessão JSON para iniciar a auditoria.
           </h2>
-          <p className="mt-3 text-sm leading-relaxed text-slate-300 md:text-base">
+          <p className="app-text-soft mt-3 text-sm leading-relaxed md:text-base">
             Apos a ingestão, a aplicação redireciona imediatamente para a sessão e inicia o acompanhamento do processamento.
           </p>
         </div>

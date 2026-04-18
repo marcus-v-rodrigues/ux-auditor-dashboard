@@ -320,39 +320,39 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
   const renderedStageSize = stageSize ?? metadata;
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 shadow-2xl shadow-slate-950/40 backdrop-blur">
+    <div className="app-elevated flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl shadow-[var(--app-shadow-soft)] backdrop-blur">
       <div
         ref={wrapperRef}
-        className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_45%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(2,6,23,0.96))] p-2"
+        className="app-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden p-2"
       >
         <div ref={viewportRef} className="relative flex h-full min-h-0 min-w-0 w-full items-center justify-center overflow-hidden">
           {showFallback ? (
             <div className="flex min-h-[24rem] w-full items-center justify-center text-center">
-              <div className="max-w-md space-y-3 rounded-2xl border border-white/10 bg-slate-950/55 px-6 py-7 shadow-2xl shadow-slate-950/30 backdrop-blur">
-                <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.3em] text-sky-200">
+              <div className="app-elevated max-w-md space-y-3 rounded-2xl px-6 py-7 shadow-[var(--app-shadow-soft)] backdrop-blur">
+                <div className="app-chip app-eyebrow inline-flex rounded-full px-3 py-1 text-[10px] font-medium tracking-[0.3em]">
                   Replay indisponível
                 </div>
-                <h3 className="text-lg font-semibold text-white">Não há replay suficiente para renderizar a sessão.</h3>
-                <p className="text-sm leading-relaxed text-slate-300">
+                <h3 className="app-heading text-lg font-semibold">Não há replay suficiente para renderizar a sessão.</h3>
+                <p className="app-text-soft text-sm leading-relaxed">
                   {fallbackMessage ?? 'O arquivo enviado precisa conter um snapshot e eventos suficientes para o rrweb-player montar o stage.'}
                 </p>
               </div>
             </div>
           ) : (
             <div
-              className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/20 shadow-2xl shadow-slate-950/40"
+              className="app-elevated relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-[var(--app-shadow-soft)]"
               style={{
                 width: renderedStageSize.width,
                 height: renderedStageSize.height,
               }}
             >
               <div ref={containerRef} className="h-full w-full" />
-              <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-slate-200 shadow-lg">
-                <span className="h-2 w-2 rounded-full bg-sky-400" />
+              <div className="app-elevated app-text-soft pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.28em] shadow-lg">
+                <span className="bg-brand h-2 w-2 rounded-full" />
                 {playerState === 'playing' ? 'Reproduzindo' : 'Reprise pronta'}
               </div>
               {overlays.length > 0 && (
-                <div className="pointer-events-none absolute right-4 top-4 rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-slate-200 shadow-lg">
+                <div className="app-elevated app-text-soft pointer-events-none absolute right-4 top-4 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.28em] shadow-lg">
                   {overlays.length} overlay{overlays.length === 1 ? '' : 's'}
                 </div>
               )}
@@ -361,12 +361,12 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 bg-white/[0.03] px-4 py-3">
+      <div className="app-panel-muted app-divider flex flex-wrap items-center gap-3 border-t px-4 py-3">
         <button
           type="button"
           onClick={togglePlay}
           disabled={!isInteractive}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-400 text-slate-950 transition-colors hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:app-disabled disabled:cursor-not-allowed"
           aria-label={playerState === 'playing' ? 'Pausar replay' : 'Reproduzir replay'}
         >
           {playerState === 'playing' ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
@@ -376,13 +376,13 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
           type="button"
           onClick={restart}
           disabled={!isInteractive}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-slate-300 transition-colors hover:border-sky-400/40 hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:text-slate-500"
+          className="app-outline-action hover:app-outline-action-hover inline-flex h-10 w-10 items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Reiniciar replay"
         >
           <RotateCcw size={16} />
         </button>
 
-        <div className="min-w-[7rem] rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 font-mono text-xs text-slate-200">
+        <div className="app-elevated app-heading min-w-[7rem] rounded-full px-3 py-2 font-mono text-xs">
           {formatTime(currentTime)} / {formatTime(duration)}
         </div>
 
@@ -394,7 +394,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
             value={currentTime ?? 0}
             onChange={handleSeek}
             disabled={!isInteractive}
-            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-400 disabled:cursor-not-allowed"
+            className="app-divider app-progress-track h-1.5 w-full cursor-pointer appearance-none rounded-full border accent-primary disabled:cursor-not-allowed"
           />
         </div>
 
@@ -402,7 +402,7 @@ export default function VideoPlayer({ events, onTimeUpdate, overlays, currentTim
           type="button"
           onClick={cycleSpeed}
           disabled={!isInteractive}
-          className="inline-flex h-10 min-w-[4.75rem] items-center justify-center gap-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-xs font-semibold text-slate-200 transition-colors hover:border-sky-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:text-slate-500"
+          className="app-outline-action hover:app-outline-action-hover inline-flex h-10 min-w-[4.75rem] items-center justify-center gap-1 rounded-full px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Alterar velocidade de reprodução"
         >
           <FastForward size={14} />

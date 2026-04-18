@@ -65,21 +65,21 @@ export function RawSessionClient({ uuid }: { uuid: string }) {
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
-      <Card className="border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30">
-        <CardHeader className="border-b border-white/10">
+      <Card className="app-panel-muted">
+        <CardHeader className="app-divider border-b">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-sm font-semibold uppercase tracking-[0.28em] text-white">
+              <CardTitle className="app-heading text-sm font-semibold uppercase tracking-[0.28em]">
                 JSON bruto da sessão
               </CardTitle>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="app-text-soft mt-2 text-sm">
                 Eventos rrweb e metadados pré-processados da sessão {uuid}.
               </p>
             </div>
             <Button
               asChild
               variant="outline"
-              className="border-white/10 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
+              className="app-outline-action hover:app-outline-action-hover"
             >
               <Link href={`/sessions/${uuid}`}>Voltar ao detalhe</Link>
             </Button>
@@ -88,41 +88,41 @@ export function RawSessionClient({ uuid }: { uuid: string }) {
 
         <CardContent className="p-6">
           {isLoading ? (
-            <p className="text-sm text-slate-300">Carregando dados brutos...</p>
+            <p className="app-text-soft text-sm">Carregando dados brutos...</p>
           ) : error ? (
-            <p className="text-sm text-red-200">{error}</p>
+            <div className="app-callout-error rounded-xl px-4 py-3 text-sm">{error}</div>
           ) : (
             <div className="grid gap-4">
-              <div className="grid gap-3 text-xs text-slate-300 md:grid-cols-3">
-                <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+              <div className="app-text-soft grid gap-3 text-xs md:grid-cols-3">
+                <div className="app-elevated rounded-xl p-3">
+                  <p className="app-text-muted text-[10px] uppercase tracking-[0.24em]">
                     Sessão
                   </p>
-                  <p className="mt-2 font-mono text-slate-100">{payload?.session_uuid}</p>
+                  <p className="app-heading mt-2 font-mono">{payload?.session_uuid}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                <div className="app-elevated rounded-xl p-3">
+                  <p className="app-text-muted text-[10px] uppercase tracking-[0.24em]">
                     Usuario
                   </p>
-                  <p className="mt-2 font-mono text-slate-100">{payload?.user_id}</p>
+                  <p className="app-heading mt-2 font-mono">{payload?.user_id}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                <div className="app-elevated rounded-xl p-3">
+                  <p className="app-text-muted text-[10px] uppercase tracking-[0.24em]">
                     Timestamp
                   </p>
-                  <p className="mt-2 font-mono text-slate-100">{payload?.timestamp}</p>
+                  <p className="app-heading mt-2 font-mono">{payload?.timestamp}</p>
                 </div>
               </div>
 
-              <div className="overflow-auto rounded-xl border border-white/10 bg-slate-950/60 p-4">
-                <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-sky-300">
+              <div className="app-elevated overflow-auto rounded-xl p-4">
+                <h3 className="app-eyebrow mb-4 text-xs font-semibold tracking-[0.24em]">
                   Events
                 </h3>
                 <JsonTree value={payload?.events ?? []} />
               </div>
 
-              <div className="overflow-auto rounded-xl border border-white/10 bg-slate-950/60 p-4">
-                <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-sky-300">
+              <div className="app-elevated overflow-auto rounded-xl p-4">
+                <h3 className="app-eyebrow mb-4 text-xs font-semibold tracking-[0.24em]">
                   Metadata
                 </h3>
                 <JsonTree value={payload?.metadata ?? {}} />

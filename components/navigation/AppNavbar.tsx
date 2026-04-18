@@ -9,13 +9,13 @@ const navItems = [
 
 export function AppNavbar() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur">
+    <header className="app-nav fixed inset-x-0 top-0 z-50">
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 md:px-6">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-sky-300">
+          <p className="app-eyebrow text-[10px]">
             UX Auditor
           </p>
-          <h1 className="truncate text-sm font-semibold text-white">
+          <h1 className="app-heading truncate text-sm font-semibold">
             Dashboard
           </h1>
         </div>
@@ -26,7 +26,7 @@ export function AppNavbar() {
               key={item.href}
               asChild
               variant="outline"
-              className="border-white/10 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
+              className="app-outline-action hover:app-outline-action-hover"
             >
               <Link href={item.href}>{item.label}</Link>
             </Button>

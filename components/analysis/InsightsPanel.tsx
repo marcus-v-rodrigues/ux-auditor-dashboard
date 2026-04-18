@@ -50,16 +50,16 @@ function statusMessage(status: ProcessingStatus): string {
 function statusBadgeClass(status: ProcessingStatus): string {
   switch (status) {
     case "completed":
-      return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+      return "app-status-success";
     case "failed":
-      return "bg-red-500/15 text-red-200 border-red-500/30";
+      return "app-status-error";
     case "processing":
     case "uploading":
-      return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+      return "app-status-processing";
     case "queued":
-      return "bg-sky-500/15 text-sky-300 border-sky-500/30";
+      return "app-status-queued";
     default:
-      return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+      return "app-status-neutral";
   }
 }
 
@@ -104,15 +104,15 @@ export function InsightsPanel({
   const llmOutput = result?.llm_output;
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl shadow-slate-950/30 backdrop-blur">
-      <div className="border-b border-white/10 px-5 py-4">
+    <div className="app-panel-muted flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl">
+      <div className="app-divider border-b px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
-              <BarChart3 className="h-4 w-4 text-sky-300" />
+            <h2 className="app-heading flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
+              <BarChart3 className="app-icon-accent h-4 w-4" />
               Resultados
             </h2>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="app-text-soft mt-1 text-xs">
               Sessão sincronizada com o replay e organizada pelo contrato real da API.
             </p>
           </div>
@@ -120,27 +120,27 @@ export function InsightsPanel({
             {processingMessage}
           </Badge>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span className="rounded-full border border-white/10 px-2 py-0.5">{processingMessage}</span>
-          <span className="rounded-full border border-white/10 px-2 py-0.5">
+        <div className="app-text-soft mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="app-chip rounded-full px-2 py-0.5">{processingMessage}</span>
+          <span className="app-chip rounded-full px-2 py-0.5">
             {totalInsights} insights
           </span>
-          <span className="rounded-full border border-white/10 px-2 py-0.5">
+          <span className="app-chip rounded-full px-2 py-0.5">
             t={currentTime}ms
           </span>
         </div>
         {processingError && (
-          <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+          <div className="app-callout-error mt-3 rounded-xl px-3 py-2 text-xs">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <div className="min-w-0">
                 <p className="font-medium">Falha de processamento</p>
-                <p className="mt-1 text-red-100/80">{processingError}</p>
+                <p className="mt-1 opacity-80">{processingError}</p>
                 {onReprocess && (
                   <button
                     type="button"
                     onClick={onReprocess}
-                    className="mt-2 inline-flex items-center gap-2 rounded-md border border-red-500/30 px-2.5 py-1 text-[10px] font-medium text-red-100 transition-colors hover:bg-red-500/10"
+                    className="mt-2 inline-flex items-center gap-2 rounded-md border border-current/30 px-2.5 py-1 text-[10px] font-medium transition-colors hover:app-hover-surface"
                   >
                     Reprocessar sessão
                   </button>
@@ -159,10 +159,10 @@ export function InsightsPanel({
             <>
               <SemanticDiagnostics result={result} />
 
-              <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
+                <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
                 <CardHeader className="border-b border-border/60 pb-4">
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white">
-                    <Clock3 className="h-4 w-4 text-sky-400" />
+                  <CardTitle className="app-heading flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
+                    <Clock3 className="app-icon-accent h-4 w-4" />
                     Insights temporais
                   </CardTitle>
                 </CardHeader>
@@ -190,8 +190,8 @@ export function InsightsPanel({
                               variant="outline"
                               className={`text-[10px] ${
                                 insight.severity === "critical"
-                                  ? "border-red-500/30 bg-red-500/10 text-red-200"
-                                  : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                                  ? "app-status-error"
+                                  : "app-status-processing"
                               }`}
                             >
                               {formatInsightLabel(insight)}

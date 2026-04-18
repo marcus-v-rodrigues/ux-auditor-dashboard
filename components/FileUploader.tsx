@@ -149,37 +149,37 @@ export function FileUploader({ onFileLoaded }: Props) {
     switch (uploadState) {
       case 'validating':
       case 'uploading':
-        return <Loader2 className="h-8 w-8 animate-spin text-sky-300" />;
+        return <Loader2 className="app-icon-accent h-8 w-8 animate-spin" />;
       case 'success':
-        return <CheckCircle className="h-8 w-8 text-cyan-300" />;
+        return <CheckCircle className="h-8 w-8 text-[var(--status-success-text)]" />;
       case 'error':
-        return <AlertCircle className="h-8 w-8 text-red-300" />;
+        return <AlertCircle className="h-8 w-8 text-[var(--status-error-text)]" />;
       default:
-        return <UploadCloud className="h-8 w-8 text-sky-300" />;
+        return <UploadCloud className="app-icon-accent h-8 w-8" />;
     }
   };
 
   const renderStatusMessage = () => {
     switch (uploadState) {
       case 'validating':
-        return <p className="text-sm text-slate-300">Validando arquivo...</p>;
+        return <p className="app-text-soft text-sm">Validando arquivo...</p>;
       case 'uploading':
-        return <p className="text-sm text-slate-300">Enviando sessão para ingestão assíncrona...</p>;
+        return <p className="app-text-soft text-sm">Enviando sessão para ingestão assíncrona...</p>;
       case 'success':
-        return <p className="text-sm text-cyan-300">Sessão enviada. O worker irá processar em segundo plano.</p>;
+        return <p className="text-sm text-[var(--status-success-text)]">Sessão enviada. O worker irá processar em segundo plano.</p>;
       case 'error':
         return (
           <div className="text-center">
-            <p className="mb-2 text-sm text-red-200">{errorMessage}</p>
-            <button onClick={clearError} className="text-sm text-sky-300 hover:underline">
+            <p className="mb-2 text-sm text-[var(--status-error-text)]">{errorMessage}</p>
+            <button onClick={clearError} className="app-icon-accent text-sm hover:underline">
               Tentar novamente
             </button>
           </div>
         );
       default:
         return (
-          <p className="mb-6 text-sm text-slate-300">
-            Arraste seu arquivo <code className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-slate-100">.json</code> aqui ou clique para selecionar.
+          <p className="app-text-soft mb-6 text-sm">
+            Arraste seu arquivo <code className="app-code rounded px-1 py-0.5">.json</code> aqui ou clique para selecionar.
           </p>
         );
     }
@@ -189,22 +189,22 @@ export function FileUploader({ onFileLoaded }: Props) {
 
   return (
     <div className="w-full flex justify-center">
-      <Card className="w-full max-w-2xl py-0 border-white/10 bg-white/[0.04] shadow-2xl shadow-slate-950/30 backdrop-blur">
+      <Card className="app-panel w-full max-w-2xl py-0">
         <CardContent className="p-6 md:p-8">
           <div
             className={[
               'flex flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-12 text-center transition-colors',
-              isDragging ? 'border-sky-400 bg-sky-400/10' : 'border-white/10 bg-white/[0.03]',
-              isProcessing ? 'cursor-not-allowed' : 'cursor-pointer hover:border-sky-400/40 hover:bg-white/[0.05]',
-              uploadState === 'error' ? 'border-red-400/50 bg-red-500/10' : '',
+              isDragging ? 'app-status-queued' : 'app-panel-muted',
+              isProcessing ? 'cursor-not-allowed' : 'cursor-pointer hover:border-[var(--status-queued-border)] hover:app-hover-surface',
+              uploadState === 'error' ? 'app-status-error' : '',
             ].join(' ')}
             onDragOver={isProcessing ? undefined : handleDragOver}
             onDragLeave={isProcessing ? undefined : handleDragLeave}
             onDrop={isProcessing ? undefined : handleDrop}
           >
-            <div className="mb-4 rounded-full border border-white/10 bg-slate-900/70 p-4 shadow-lg">{renderIcon()}</div>
+            <div className="app-elevated mb-4 rounded-full p-4 shadow-lg">{renderIcon()}</div>
 
-            <h3 className="mb-2 text-lg font-semibold text-white">Upload de sessão</h3>
+            <h3 className="app-heading mb-2 text-lg font-semibold">Upload de sessão</h3>
 
             {renderStatusMessage()}
 
@@ -212,7 +212,7 @@ export function FileUploader({ onFileLoaded }: Props) {
               <>
                 <label
                   htmlFor="file-upload"
-                  className="cursor-pointer rounded-md bg-sky-400 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-sky-300"
+                  className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                 >
                   Selecionar Arquivo
                 </label>
@@ -229,8 +229,8 @@ export function FileUploader({ onFileLoaded }: Props) {
 
             {isProcessing && (
               <div className="mt-2 w-full max-w-xs">
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full w-full animate-pulse bg-gradient-to-r from-sky-400 to-cyan-300" />
+                <div className="app-progress-track h-1.5 overflow-hidden rounded-full">
+                  <div className="h-full w-full animate-pulse bg-gradient-to-r from-[var(--status-queued-border)] to-[var(--status-success-border)]" />
                 </div>
               </div>
             )}

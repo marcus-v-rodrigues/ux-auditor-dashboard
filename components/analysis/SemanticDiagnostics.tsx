@@ -61,7 +61,7 @@ function renderEvidence(value: unknown): ReactNode {
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Evidências</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {items.map((item, index) => (
-          <Badge key={`${item}-${index}`} variant="outline" className="text-[10px] text-foreground">
+          <Badge key={`${item}-${index}`} variant="outline" className="app-chip text-[10px]">
             {item}
           </Badge>
         ))}
@@ -189,7 +189,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
         <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
-              <BrainCircuit className="h-4 w-4 text-sky-300" />
+              <BrainCircuit className="app-icon-accent h-4 w-4" />
               Confiança e hipótese principal
             </CardTitle>
           </CardHeader>
@@ -214,7 +214,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
         <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
-              <BrainCircuit className="h-4 w-4 text-sky-300" />
+              <BrainCircuit className="app-icon-accent h-4 w-4" />
               Padrões comportamentais
             </CardTitle>
           </CardHeader>
@@ -224,7 +224,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
         <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
-              <ListChecks className="h-4 w-4 text-sky-300" />
+              <ListChecks className="app-icon-accent h-4 w-4" />
               Fricções
             </CardTitle>
           </CardHeader>
@@ -234,7 +234,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
         <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-sky-300" />
+              <CheckCircle2 className="app-icon-accent h-4 w-4" />
               Sinais de progresso
             </CardTitle>
           </CardHeader>
@@ -259,7 +259,7 @@ export function SemanticDiagnostics({ result }: SemanticDiagnosticsProps) {
         <Card className="w-full min-w-0 border-border/70 bg-card/80 shadow-sm">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
-              <BrainCircuit className="h-4 w-4 text-sky-300" />
+              <BrainCircuit className="app-icon-accent h-4 w-4" />
               Complementos analíticos
             </CardTitle>
           </CardHeader>

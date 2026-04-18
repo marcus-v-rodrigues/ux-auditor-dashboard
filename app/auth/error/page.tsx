@@ -34,17 +34,17 @@ function ErrorContent() {
 
   return (
     <div className="flex flex-col items-center text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-        <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+      <div className="app-callout-error mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+        <AlertCircle className="h-8 w-8" />
       </div>
-      <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+      <h2 className="app-heading text-2xl font-bold tracking-tight">
         Erro de autenticação
       </h2>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      <p className="app-text-soft mt-2 text-sm">
         {errorMessage}
       </p>
       {error ? (
-        <p className="mt-1 text-xs font-mono text-slate-500 dark:text-slate-500">
+        <p className="app-text-muted mt-1 text-xs font-mono">
           Código do erro: {error}
         </p>
       ) : null}
@@ -54,43 +54,45 @@ function ErrorContent() {
 
 export default function AuthErrorPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-      <div className="w-full max-w-md space-y-8 rounded-2xl bg-white p-8 shadow-xl dark:bg-slate-900">
-        <Suspense
-          fallback={
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-                <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+    <section className="min-h-[calc(100vh-4rem)] px-4 py-8 md:px-6 md:py-10">
+      <div className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-md items-center">
+        <div className="app-panel-strong w-full space-y-8 rounded-2xl p-8">
+          <Suspense
+            fallback={
+              <div className="flex flex-col items-center text-center">
+                <div className="app-callout-error mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                  <AlertCircle className="h-8 w-8" />
+                </div>
+                <h2 className="app-heading text-2xl font-bold tracking-tight">
+                  Erro de autenticação
+                </h2>
+                <p className="app-text-soft mt-2 text-sm">
+                  Carregando...
+                </p>
               </div>
-              <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Erro de autenticação
-              </h2>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                Carregando...
-              </p>
-            </div>
-          }
-        >
-          <ErrorContent />
-        </Suspense>
+            }
+          >
+            <ErrorContent />
+          </Suspense>
 
-        <div className="space-y-4">
-          <Button
-            onClick={() => (window.location.href = "/auth/signin")}
-            className="w-full"
-            variant="default"
-          >
-            Tentar novamente
-          </Button>
-          <Button
-            onClick={() => (window.location.href = "/")}
-            className="w-full"
-            variant="outline"
-          >
-            Ir para a página inicial
-          </Button>
+          <div className="space-y-4">
+            <Button
+              onClick={() => (window.location.href = "/auth/signin")}
+              className="w-full"
+              variant="default"
+            >
+              Tentar novamente
+            </Button>
+            <Button
+              onClick={() => (window.location.href = "/")}
+              className="w-full"
+              variant="outline"
+            >
+              Ir para a página inicial
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
